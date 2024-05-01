@@ -13,6 +13,7 @@ class HelloTriangleApplication {
 public:
 	void run()
 	{
+		initGLFW();
 		initVulkan();
 		mainLoop();
 		cleanup();
@@ -20,8 +21,9 @@ public:
 
 private:
 	GLFWwindow *window;
+	VkInstance instance;
 
-	void initVulkan()
+	void initGLFW(void)
 	{
 		glfwInit();
 
@@ -29,10 +31,45 @@ private:
 		glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
 		this->window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "vk-test", nullptr, nullptr);
-
 	}
 
-	void mainLoop()
+	void initVulkan(void)
+	{
+		createInstance();
+	}
+
+	void createInstance(void)
+	{
+		uint32_t glfwExtentionCount;
+		const char **glfwExtentions;
+
+		VkApplicationInfo appInfo = {
+			.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
+			.pNext = nullptr,
+			.pApplicationName = "triangle tesT",
+			.applicationVersion = VK_MAKE_VERSION(1, 0, 0),
+			.pEngineName = "no engine",
+			.engineVersion = VK_MAKE_VERSION(1, 0, 0),
+			.apiVersion = VK_API_VERSION_1_0
+		};
+
+		glfwExtentions = glfwGetRequiredInstanceExtensions(&glfwExtentionCount);
+
+		VkInstanceCreateInfo createInfo = {
+			.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
+			.pNext = nullptr,
+			.flags = 0,
+			.pApplicationInfo = &appInfo,
+			.enabledLayerCount = 0,
+			.ppEnabledLayerNames = nullptr,
+			.enabledExtensionCount = glfwExtentionCount,
+			.ppEnabledExtensionNames = glfwExtentions,
+		};
+
+		VkResult result = vkCreateInstance(&createInfo, nullptr, &instance);
+	}
+
+	void mainLoop(void)
 	{
 		while (!glfwWindowShouldClose(this->window)) {
 			glfwPollEvents();
@@ -40,7 +77,7 @@ private:
 
 	}
 
-	void cleanup()
+	void cleanup(void)
 	{
 		glfwDestroyWindow(this->window);
 		glfwTerminate();
