@@ -1,0 +1,40 @@
+[
+  {
+    "arguments": [
+      "/usr/bin/g++",
+      "-c",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "-g3",
+      "-O0",
+      "-std=c++17",
+      "-fdiagnostics-color=always",
+      "-o",
+      "extentions",
+      "extentions.cpp"
+    ],
+    "directory": "/home/tlucanti/git/vk-test",
+    "file": "/home/tlucanti/git/vk-test/extentions.cpp",
+    "output": "/home/tlucanti/git/vk-test/extentions"
+  },
+  {
+    "arguments": [
+      "/usr/bin/g++",
+      "-c",
+      "-Wall",
+      "-Wextra",
+      "-Werror",
+      "-g3",
+      "-O0",
+      "-std=c++17",
+      "-fdiagnostics-color=always",
+      "-o",
+      "triangle",
+      "triangle.cpp"
+    ],
+    "directory": "/home/tlucanti/git/vk-test",
+    "file": "/home/tlucanti/git/vk-test/triangle.cpp",
+    "output": "/home/tlucanti/git/vk-test/triangle"
+  }
+]
