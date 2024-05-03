@@ -6,18 +6,17 @@
 #include <stdexcept>
 #include <cstdlib>
 #include <cstring>
-
-#define ARRAY_SIZE(x) (sizeof(x) / sizeof(x[0]))
+#include <vector>
 
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 600
 
 #if CONFIG_VALIDATION_LAYERS
-const char *validationLayers[] = {
+std::vector<const char *> validationLayers = {
 	"VK_LAYER_KHRONOS_validation",
 };
 #else
-const char *validationLayers[] = {};
+std::vector<const char *> validationLayers;
 #endif
 
 class HelloTriangleApplication {
@@ -50,15 +49,34 @@ private:
 			throw std::runtime_error("validation layers requested, but not available!");
 		}
 
-		createInstance();
 		printExtentions();
+		createInstance();
 	}
+
+	std::vector<const char *> getRequieredExtensions()
+	{
+		uint32_t glfwExtensionCount;
+		const char **glfwExtentions;
+
+		glfwExtentions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+		std::vector<const char *> extensions(glfwExtentions, glfwExtentions + glfwExtensionCount);
+
+		std::cout << "requiered glfw extensions:\n";
+		for (const char *extension : extensions) {
+			std::cout << '\t' << extension << '\n';
+		}
+		std::cout << '\n';
+
+		if (CONFIG_VALIDATION_LAYERS) {
+			extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+		}
+
+		return extensions;
+	}
+
 
 	void createInstance(void)
 	{
-		uint32_t glfwExtentionCount;
-		const char **glfwExtentions;
-
 		VkApplicationInfo appInfo = {
 			.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
 			.pNext = nullptr,
@@ -69,20 +87,21 @@ private:
 			.apiVersion = VK_API_VERSION_1_0
 		};
 
-		glfwExtentions = glfwGetRequiredInstanceExtensions(&glfwExtentionCount);
-
+		auto requieredExtensions = getRequieredExtensions();
 		VkInstanceCreateInfo createInfo = {
 			.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
 			.pNext = nullptr,
 			.flags = 0,
 			.pApplicationInfo = &appInfo,
-			.enabledLayerCount = ARRAY_SIZE(validationLayers),
-			.ppEnabledLayerNames = validationLayers,
-			.enabledExtensionCount = glfwExtentionCount,
-			.ppEnabledExtensionNames = glfwExtentions,
+			.enabledLayerCount = (uint32_t)validationLayers.size(),
+			.ppEnabledLayerNames = validationLayers.data(),
+			.enabledExtensionCount = (uint32_t)requieredExtensions.size(),
+			.ppEnabledExtensionNames = requieredExtensions.data(),
 		};
 
-		if (vkCreateInstance(&createInfo, nullptr, &instance) != VK_SUCCESS) {
+		VkResult result = vkCreateInstance(&createInfo, nullptr, &instance);
+		if (result != VK_SUCCESS) {
+			std::cout << "vkCreateInstance: errorcode " << result << '\n';
 			throw std::runtime_error("failed to create instance!");
 		}
 	}
@@ -92,15 +111,45 @@ private:
 		uint32_t extensionCount;
 
 		vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
-		auto extensions = new VkExtensionProperties[extensionCount];
-		vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, extensions);
+		std::vector<VkExtensionProperties> extensions(extensionCount);
+		vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, extensions.data());
 
 		std::cout << "avaliable extensions:\n";
 		for (uint32_t i = 0; i < extensionCount; i++) {
-			std::cout << extensions[i].extensionName << '\n';
+			std::cout << '\t' << extensions[i].extensionName << '\n';
 		}
+		std::cout << '\n';
+	}
 
-		delete[] extensions;
+	static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
+		VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+		VkDebugUtilsMessageTypeFlagsEXT messageType,
+		const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
+		void* pUserData)
+	{
+		(void)messageSeverity;
+		(void)messageType;
+		(void)pUserData;
+
+		switch (messageSeverity) {
+			case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
+				std::cerr << "validation layer: ";
+				break;
+			case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
+				std::cerr << "[VALIDATION INFO]: ";
+				break;
+			case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
+				std::cerr << "[VALIDATION WARNING]: ";
+				break;
+			case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
+				std::cerr << "[VALIDATION ERROR]: ";
+				break;
+			default:
+				throw std::runtime_error("unknown message severity");
+		}
+		std::cerr << pCallbackData->pMessage << '\n';
+
+		return VK_FALSE;
 	}
 
 	bool checkValidationLayerSupport(void)
@@ -108,14 +157,14 @@ private:
 		uint32_t layerCount;
 
 		vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
-		auto layers = new VkLayerProperties[layerCount];
-		vkEnumerateInstanceLayerProperties(&layerCount, layers);
+		std::vector<VkLayerProperties> layers(layerCount);
+		vkEnumerateInstanceLayerProperties(&layerCount, layers.data());
 
-		for (uint32_t layerName = 0; layerName < ARRAY_SIZE(validationLayers); layerName++) {
+		for (const char *layerName : validationLayers) {
 			bool found = false;
 
-			for (uint32_t layerProperties = 0; layerProperties < layerCount; layerProperties++) {
-				if (std::strcmp(validationLayers[layerName], layers[layerProperties].layerName) == 0) {
+			for (const VkLayerProperties &layerProperties : layers) {
+				if (std::strcmp(layerName, layerProperties.layerName) == 0) {
 					found = true;
 					break;
 				}
