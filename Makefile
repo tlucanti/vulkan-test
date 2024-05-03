@@ -1,6 +1,9 @@
 
-CFLAGS	= -Wall -Wextra -Werror -g3 -O0 -std=c++17 -fdiagnostics-color=always
+CFLAGS	= -Wall -Wextra -std=c++17 -fdiagnostics-color=always
 LDFLAGS	= -lglfw -lvulkan
+
+CFLAGS += -g3 -O0
+CFLAGS += -D CONFIG_VALIDATION_LAYERS=1
 
 all: extentions triangle
 
