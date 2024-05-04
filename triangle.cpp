@@ -19,6 +19,38 @@ std::vector<const char *> validationLayers = {
 std::vector<const char *> validationLayers;
 #endif
 
+static VkResult CreateDebugUtilsMessengerEXT(
+	VkInstance instance,
+	const VkDebugUtilsMessengerCreateInfoEXT *pCreateInfo,
+	const VkAllocationCallbacks *pAllocator,
+	VkDebugUtilsMessengerEXT *pDebugMessenger)
+{
+	auto func = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(
+		instance, "vkCreateDebugUtilsMessengerEXT");
+
+	if (func != nullptr) {
+		return func(instance, pCreateInfo, pAllocator, pDebugMessenger);
+	} else {
+		return VK_ERROR_EXTENSION_NOT_PRESENT;
+	}
+}
+
+static void
+DestroyDebugUtilsMessengerEXT(VkInstance instance,
+			      VkDebugUtilsMessengerEXT debugMessenger,
+			      const VkAllocationCallbacks *pAllocator)
+{
+	auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(
+		instance, "vkDestroyDebugUtilsMessengerEXT");
+
+	if (func != nullptr) {
+		func(instance, debugMessenger, pAllocator);
+	} else {
+		throw std::runtime_error("vkDestroyDebugUtilsMessengerEXT function is not present");
+	}
+}
+
+
 class HelloTriangleApplication {
 public:
 	void run()
@@ -32,6 +64,7 @@ public:
 private:
 	GLFWwindow *window;
 	VkInstance instance;
+	VkDebugUtilsMessengerEXT debugMessenger;
 
 	void initGLFW(void)
 	{
@@ -51,6 +84,7 @@ private:
 
 		printExtentions();
 		createInstance();
+		setupDebugMessenger();
 	}
 
 	std::vector<const char *> getRequieredExtensions()
@@ -103,6 +137,33 @@ private:
 		if (result != VK_SUCCESS) {
 			std::cout << "vkCreateInstance: errorcode " << result << '\n';
 			throw std::runtime_error("failed to create instance!");
+		}
+	}
+
+	void setupDebugMessenger(void)
+	{
+		if (not CONFIG_VALIDATION_LAYERS) {
+			return;
+		}
+
+		uint32_t severity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
+				    VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+				    VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+		uint32_t type = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+				VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+				VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+		VkDebugUtilsMessengerCreateInfoEXT createInfo = {
+			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
+			.pNext = nullptr,
+			.flags = 0,
+			.messageSeverity = severity,
+			.messageType = type,
+			.pfnUserCallback = debugCallback,
+			.pUserData = nullptr
+		};
+
+		if (CreateDebugUtilsMessengerEXT(instance, &createInfo, nullptr, &debugMessenger) != VK_SUCCESS) {
+			throw std::runtime_error("failed to set up debug messenger!");
 		}
 	}
 
@@ -188,10 +249,12 @@ private:
 
 	void cleanup(void)
 	{
+		if (CONFIG_VALIDATION_LAYERS) {
+			DestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
+		}
 		glfwDestroyWindow(this->window);
 		vkDestroyInstance(instance, nullptr);
 		glfwTerminate();
-
 	}
 };
 
