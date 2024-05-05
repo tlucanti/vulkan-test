@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <vector>
+#include <string>
 
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 600
@@ -18,6 +19,14 @@ std::vector<const char *> validationLayers = {
 #else
 std::vector<const char *> validationLayers;
 #endif
+
+static inline void CALL_VK(VkResult result, std::string message)
+{
+	if (result != VK_SUCCESS) {
+		message += " (errorcode: " + std::to_string(result) + ")";
+		throw std::runtime_error(message);
+	}
+}
 
 static VkResult CreateDebugUtilsMessengerEXT(
 	VkInstance instance,
@@ -65,6 +74,7 @@ private:
 	GLFWwindow *window;
 	VkInstance instance;
 	VkDebugUtilsMessengerEXT debugMessenger;
+	VkPhysicalDevice physicalDevice;
 
 	void initGLFW(void)
 	{
@@ -85,6 +95,8 @@ private:
 		printExtentions();
 		createInstance();
 		setupDebugMessenger();
+		printPhysicalDevices();
+		pickPhysicalDevice();
 	}
 
 	std::vector<const char *> getRequieredExtensions()
@@ -133,22 +145,19 @@ private:
 			.ppEnabledExtensionNames = requieredExtensions.data(),
 		};
 
+		VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo;
 		if (CONFIG_VALIDATION_LAYERS) {
-			VkDebugUtilsMessengerCreateInfoEXT debugCreaateInfo;
 
-			populateDebugMessengerCreateInfo(&debugCreaateInfo);
+			populateDebugMessengerCreateInfo(&debugCreateInfo);
 
 			createInfo.enabledLayerCount = (uint32_t)validationLayers.size();
 			createInfo.ppEnabledLayerNames = validationLayers.data();
-			createInfo.pNext = &debugCreaateInfo;
+			createInfo.pNext = &debugCreateInfo;
 		}
 
 
-		VkResult result = vkCreateInstance(&createInfo, nullptr, &instance);
-		if (result != VK_SUCCESS) {
-			std::cout << "vkCreateInstance: errorcode " << result << '\n';
-			throw std::runtime_error("failed to create instance!");
-		}
+		CALL_VK(vkCreateInstance(&createInfo, nullptr, &instance),
+			"filed to create instance");
 	}
 
 	void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT *createInfo)
@@ -179,8 +188,54 @@ private:
 		}
 
 		populateDebugMessengerCreateInfo(&createInfo);
-		if (CreateDebugUtilsMessengerEXT(instance, &createInfo, nullptr, &debugMessenger) != VK_SUCCESS) {
-			throw std::runtime_error("failed to set up debug messenger!");
+		CALL_VK(CreateDebugUtilsMessengerEXT(instance, &createInfo, nullptr, &debugMessenger),
+			"failed to set up debug messenger!");
+	}
+
+	bool isDeviceSutable(const VkPhysicalDevice &device)
+	{
+		VkPhysicalDeviceProperties deviceProperties;
+		VkPhysicalDeviceFeatures deviceFeatures;
+
+		vkGetPhysicalDeviceProperties(device, &deviceProperties);
+		vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
+
+		if ((deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU ||
+		     deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU ||
+		     deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU) &&
+		    deviceFeatures.geometryShader == VK_TRUE) {
+			std::cout << "selecting physical device " << deviceProperties.deviceName << '\n';
+			return true;
+		} else {
+			return false;
+		}
+	}
+
+	void pickPhysicalDevice(void)
+	{
+		physicalDevice = VK_NULL_HANDLE;
+		uint32_t deviceCount;
+
+		CALL_VK(vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr),
+			"failed to get physical devices count");
+
+		if (deviceCount == 0) {
+			throw std::runtime_error("no GPU devices with vulkan support");
+		}
+
+		std::vector<VkPhysicalDevice> devices(deviceCount);
+		CALL_VK(vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data()),
+			"failed to get physical devices list");
+
+		for (const auto &device : devices) {
+			if (isDeviceSutable(device)) {
+				physicalDevice = device;
+				break;
+			}
+		}
+
+		if (physicalDevice == VK_NULL_HANDLE) {
+			throw std::runtime_error("failed to find sutable GPU");
 		}
 	}
 
@@ -188,13 +243,40 @@ private:
 	{
 		uint32_t extensionCount;
 
-		vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
+		CALL_VK(vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr),
+			"failed to get vulkan extentions count");
 		std::vector<VkExtensionProperties> extensions(extensionCount);
-		vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, extensions.data());
+		CALL_VK(vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, extensions.data()),
+			"faild to get vulkan extentions list");
 
 		std::cout << "avaliable extensions:\n";
-		for (uint32_t i = 0; i < extensionCount; i++) {
-			std::cout << '\t' << extensions[i].extensionName << '\n';
+		for (const auto &extensionProperties : extensions) {
+			std::cout << '\t' << extensionProperties.extensionName << '\n';
+		}
+		std::cout << '\n';
+	}
+
+	void printPhysicalDevices(void)
+	{
+		uint32_t deviceCount;
+		CALL_VK(vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr),
+			"failed to get physical device count");
+
+		std::cout << "avaliable physical devices:\n";
+		if (deviceCount == 0) {
+			std::cout << "\tNO DEVICES AVALIABLE\n";
+			return;
+		}
+
+		std::vector<VkPhysicalDevice> devices(deviceCount);
+		CALL_VK(vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data()),
+			"failed to get physical devices list");
+
+		for (const auto &device : devices) {
+			VkPhysicalDeviceProperties deviceProperties;
+
+			vkGetPhysicalDeviceProperties(device, &deviceProperties);
+			std::cout << '\t' << deviceProperties.deviceName << '\n';
 		}
 		std::cout << '\n';
 	}
@@ -211,8 +293,9 @@ private:
 
 		switch (messageSeverity) {
 			case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
-				std::cerr << "validation layer: ";
-				break;
+				// std::cerr << "validation layer: ";
+				// break;
+				return VK_FALSE;
 			case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
 				std::cerr << "[VALIDATION INFO]: ";
 				break;
@@ -234,14 +317,16 @@ private:
 	{
 		uint32_t layerCount;
 
-		vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
+		CALL_VK(vkEnumerateInstanceLayerProperties(&layerCount, nullptr),
+			"failed to get validation layer count");
 		std::vector<VkLayerProperties> layers(layerCount);
-		vkEnumerateInstanceLayerProperties(&layerCount, layers.data());
+		CALL_VK(vkEnumerateInstanceLayerProperties(&layerCount, layers.data()),
+			"failed to get validation layer properties list");
 
 		for (const char *layerName : validationLayers) {
 			bool found = false;
 
-			for (const VkLayerProperties &layerProperties : layers) {
+			for (const auto &layerProperties : layers) {
 				if (std::strcmp(layerName, layerProperties.layerName) == 0) {
 					found = true;
 					break;
@@ -267,7 +352,7 @@ private:
 	void cleanup(void)
 	{
 		if (CONFIG_VALIDATION_LAYERS) {
-			// DestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
+			DestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
 		}
 		glfwDestroyWindow(this->window);
 		vkDestroyInstance(instance, nullptr);
