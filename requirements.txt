@@ -1,0 +1,9 @@
+
+vulkan-tools
+libvulkan-dev
+vulkan-validationlayers-dev
+spirv-tools
+
+libglm-dev
+
+libglfw3-dev
