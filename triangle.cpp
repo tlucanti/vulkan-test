@@ -75,9 +75,11 @@ private:
 	VkInstance instance;
 	VkDebugUtilsMessengerEXT debugMessenger;
 	VkPhysicalDevice physicalDevice;
+	VkDevice device;
+	VkQueue graphicsQueue;
 
 	struct QueueFamilyIndices {
-		int graphicsFamily;
+		uint32_t graphicsFamily;
 	};
 
 	void initGLFW(void)
@@ -101,6 +103,7 @@ private:
 		setupDebugMessenger();
 		printPhysicalDevices();
 		pickPhysicalDevice();
+		createLogicalDevice();
 	}
 
 	std::vector<const char *> getRequieredExtensions()
@@ -160,7 +163,7 @@ private:
 
 
 		CALL_VK(vkCreateInstance(&createInfo, nullptr, &instance),
-			"filed to create instance");
+			"failed to create instance");
 	}
 
 	void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT *createInfo)
@@ -202,7 +205,7 @@ private:
 
 		uint32_t i = 0;
 		QueueFamilyIndices indices = {
-			.graphicsFamily = -1,
+			.graphicsFamily = (uint32_t)-1,
 		};
 
 		vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
@@ -235,7 +238,7 @@ private:
 			 deviceFeatures.geometryShader == VK_TRUE;
 
 		indices = findQueueFamilies(device);
-		bool hasGraphicsQueue = indices.graphicsFamily != -1;
+		bool hasGraphicsQueue = indices.graphicsFamily != (uint32_t)-1;
 
 		if (deviceTypeOk && hasGraphicsQueue) {
 			std::cout << "selecting physical device " << deviceProperties.deviceName << '\n';
@@ -271,6 +274,46 @@ private:
 		if (physicalDevice == VK_NULL_HANDLE) {
 			throw std::runtime_error("failed to find sutable GPU");
 		}
+	}
+
+	void createLogicalDevice(void)
+	{
+		QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
+
+		float queuePrioriy = 1.0f;
+		VkDeviceQueueCreateInfo queueCreateInfo = {
+			.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+			.pNext = nullptr,
+			.flags = 0,
+			.queueFamilyIndex = indices.graphicsFamily,
+			.queueCount = 1,
+			.pQueuePriorities = &queuePrioriy,
+		};
+
+		VkPhysicalDeviceFeatures deviceFeatures = {};
+
+		VkDeviceCreateInfo createInfo = {
+			.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+			.pNext = nullptr,
+			.flags = 0,
+			.queueCreateInfoCount = 1,
+			.pQueueCreateInfos = &queueCreateInfo,
+			.enabledLayerCount = 0,
+			.ppEnabledLayerNames = nullptr,
+			.enabledExtensionCount = 0,
+			.ppEnabledExtensionNames = nullptr,
+			.pEnabledFeatures = &deviceFeatures,
+		};
+
+		if (CONFIG_VALIDATION_LAYERS) {
+			createInfo.enabledLayerCount = validationLayers.size();
+			createInfo.ppEnabledLayerNames = validationLayers.data();
+		}
+
+		CALL_VK(vkCreateDevice(physicalDevice, &createInfo, nullptr, &device),
+			"failed to create logical device");
+
+		vkGetDeviceQueue(device, indices.graphicsFamily, 0, &graphicsQueue);
 	}
 
 	void printExtentions(void)
@@ -393,6 +436,7 @@ private:
 			DestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
 		}
 		glfwDestroyWindow(this->window);
+		vkDestroyDevice(device, nullptr);
 		vkDestroyInstance(instance, nullptr);
 		glfwTerminate();
 	}
