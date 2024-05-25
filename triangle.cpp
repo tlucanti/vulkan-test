@@ -76,6 +76,10 @@ private:
 	VkDebugUtilsMessengerEXT debugMessenger;
 	VkPhysicalDevice physicalDevice;
 
+	struct QueueFamilyIndices {
+		int graphicsFamily;
+	};
+
 	void initGLFW(void)
 	{
 		glfwInit();
@@ -119,7 +123,6 @@ private:
 
 		return extensions;
 	}
-
 
 	void createInstance(void)
 	{
@@ -192,29 +195,60 @@ private:
 			"failed to set up debug messenger!");
 	}
 
+	QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device)
+	{
+		uint32_t queueFamilyCount;
+		std::vector<VkQueueFamilyProperties> queueFamilies;
+
+		uint32_t i = 0;
+		QueueFamilyIndices indices = {
+			.graphicsFamily = -1,
+		};
+
+		vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
+		queueFamilies.resize(queueFamilyCount);
+		vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
+
+		for (const auto &queueFamily : queueFamilies) {
+			if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+				indices.graphicsFamily = i;
+			}
+
+			i++;
+		}
+
+		return indices;
+	}
+
 	bool isDeviceSutable(const VkPhysicalDevice &device)
 	{
 		VkPhysicalDeviceProperties deviceProperties;
 		VkPhysicalDeviceFeatures deviceFeatures;
+		QueueFamilyIndices indices;
 
 		vkGetPhysicalDeviceProperties(device, &deviceProperties);
 		vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
+		bool deviceTypeOk =
+			(deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU ||
+			 deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU ||
+			 deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU) &&
+			 deviceFeatures.geometryShader == VK_TRUE;
 
-		if ((deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU ||
-		     deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU ||
-		     deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU) &&
-		    deviceFeatures.geometryShader == VK_TRUE) {
+		indices = findQueueFamilies(device);
+		bool hasGraphicsQueue = indices.graphicsFamily != -1;
+
+		if (deviceTypeOk && hasGraphicsQueue) {
 			std::cout << "selecting physical device " << deviceProperties.deviceName << '\n';
 			return true;
-		} else {
-			return false;
 		}
+		return false;
 	}
 
 	void pickPhysicalDevice(void)
 	{
 		physicalDevice = VK_NULL_HANDLE;
 		uint32_t deviceCount;
+		std::vector<VkPhysicalDevice> devices;
 
 		CALL_VK(vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr),
 			"failed to get physical devices count");
@@ -223,7 +257,7 @@ private:
 			throw std::runtime_error("no GPU devices with vulkan support");
 		}
 
-		std::vector<VkPhysicalDevice> devices(deviceCount);
+		devices.resize(deviceCount);
 		CALL_VK(vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data()),
 			"failed to get physical devices list");
 
@@ -242,10 +276,11 @@ private:
 	void printExtentions(void)
 	{
 		uint32_t extensionCount;
+		std::vector<VkExtensionProperties> extensions;
 
 		CALL_VK(vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr),
 			"failed to get vulkan extentions count");
-		std::vector<VkExtensionProperties> extensions(extensionCount);
+		extensions.resize(extensionCount);
 		CALL_VK(vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, extensions.data()),
 			"faild to get vulkan extentions list");
 
@@ -259,6 +294,8 @@ private:
 	void printPhysicalDevices(void)
 	{
 		uint32_t deviceCount;
+		std::vector<VkPhysicalDevice> devices;
+
 		CALL_VK(vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr),
 			"failed to get physical device count");
 
@@ -268,7 +305,7 @@ private:
 			return;
 		}
 
-		std::vector<VkPhysicalDevice> devices(deviceCount);
+		devices.resize(deviceCount);
 		CALL_VK(vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data()),
 			"failed to get physical devices list");
 
@@ -316,10 +353,11 @@ private:
 	bool checkValidationLayerSupport(void)
 	{
 		uint32_t layerCount;
+		std::vector<VkLayerProperties> layers;
 
 		CALL_VK(vkEnumerateInstanceLayerProperties(&layerCount, nullptr),
 			"failed to get validation layer count");
-		std::vector<VkLayerProperties> layers(layerCount);
+		layers.resize(layerCount);
 		CALL_VK(vkEnumerateInstanceLayerProperties(&layerCount, layers.data()),
 			"failed to get validation layer properties list");
 
