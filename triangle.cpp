@@ -89,6 +89,7 @@ private:
 	std::vector<VkImage> swapChainImages;
 	VkFormat swapChainImageFormat;
 	VkExtent2D swapChainExtent;
+	std::vector<VkImageView> swapChainImageViews;
 
 	struct QueueFamilyIndices {
 		uint32_t graphicsFamily;
@@ -125,6 +126,7 @@ private:
 		pickPhysicalDevice();
 		createLogicalDevice();
 		createSwapChain();
+		createImageViews();
 	}
 
 	std::vector<const char *> getRequieredExtensions()
@@ -510,6 +512,38 @@ private:
 		swapChainExtent = extent;
 	}
 
+	void createImageViews(void)
+	{
+		swapChainImageViews.resize(swapChainImages.size());
+
+		for (int i = 0; i < (int)swapChainImages.size(); i++) {
+			VkImageViewCreateInfo createInfo = {
+				.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+				.pNext = nullptr,
+				.flags = 0,
+				.image = swapChainImages.at(i),
+				.viewType = VK_IMAGE_VIEW_TYPE_2D,
+				.format = swapChainImageFormat,
+				.components = {
+					.r = VK_COMPONENT_SWIZZLE_IDENTITY,
+					.g = VK_COMPONENT_SWIZZLE_IDENTITY,
+					.b = VK_COMPONENT_SWIZZLE_IDENTITY,
+					.a = VK_COMPONENT_SWIZZLE_IDENTITY,
+				},
+				.subresourceRange = {
+					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+					.baseMipLevel = 0,
+					.levelCount = 1,
+					.baseArrayLayer = 0,
+					.layerCount = 1,
+				},
+			};
+
+			CALL_VK(vkCreateImageView(device, &createInfo, nullptr, &swapChainImageViews.at(i)),
+				"failed to create image view");
+		}
+	}
+
 	void printExtentions(void)
 	{
 		uint32_t extensionCount;
@@ -650,6 +684,9 @@ private:
 			DestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
 		}
 		glfwDestroyWindow(this->window);
+		for (auto &imageView : swapChainImageViews) {
+			vkDestroyImageView(device, imageView, nullptr);
+		}
 		vkDestroySwapchainKHR(device, swapChain, nullptr);
 		vkDestroyDevice(device, nullptr);
 		vkDestroySurfaceKHR(instance, surface, nullptr);
