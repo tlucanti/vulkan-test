@@ -108,6 +108,7 @@ private:
 	VkRenderPass renderPass;
 	VkPipelineLayout pipelineLayout;
 	VkPipeline graphicsPipeline;
+	std::vector<VkFramebuffer> swapChainFramebuffers;
 
 	struct QueueFamilyIndices {
 		uint32_t graphicsFamily;
@@ -147,6 +148,7 @@ private:
 		createImageViews();
 		createRenderPass();
 		createGraphicsPipeline();
+		createFramebuffers();
 	}
 
 	std::vector<const char *> getRequieredExtensions()
@@ -817,6 +819,32 @@ private:
 		std::cout << "created pipeline with " << pipelineCreateInfo.stageCount << " stages\n";
 	}
 
+	void createFramebuffers(void)
+	{
+		swapChainFramebuffers.resize(swapChainImageViews.size());
+
+		for (int i = 0; i < (int)swapChainImageViews.size(); i++) {
+			VkImageView attachments[] = {
+				swapChainImageViews.at(i),
+			};
+
+			VkFramebufferCreateInfo framebufferCreateInfo = {
+				.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+				.pNext = nullptr,
+				.flags = 0,
+				.renderPass = renderPass,
+				.attachmentCount = 1,
+				.pAttachments = attachments,
+				.width = swapChainExtent.width,
+				.height = swapChainExtent.height,
+				.layers = 1,
+			};
+
+			CALL_VK(vkCreateFramebuffer(device, &framebufferCreateInfo, nullptr, &swapChainFramebuffers.at(i)),
+				"failed to create framebuffer");
+		}
+	}
+
 	void printExtentions(void)
 	{
 		uint32_t extensionCount;
@@ -957,6 +985,9 @@ private:
 			DestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
 		}
 		glfwDestroyWindow(this->window);
+		for (auto &framebuffer : swapChainFramebuffers) {
+			vkDestroyFramebuffer(device, framebuffer, nullptr);
+		}
 		for (auto &imageView : swapChainImageViews) {
 			vkDestroyImageView(device, imageView, nullptr);
 		}
