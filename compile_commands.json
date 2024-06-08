@@ -16,9 +16,9 @@
       "extentions",
       "extentions.cpp"
     ],
-    "directory": "/home/tlucanti/git/vk-test",
-    "file": "/home/tlucanti/git/vk-test/extentions.cpp",
-    "output": "/home/tlucanti/git/vk-test/extentions"
+    "directory": "/home/tlucanti/git/vulkan-test",
+    "file": "/home/tlucanti/git/vulkan-test/extentions.cpp",
+    "output": "/home/tlucanti/git/vulkan-test/extentions"
   },
   {
     "arguments": [
@@ -37,8 +37,8 @@
       "triangle",
       "triangle.cpp"
     ],
-    "directory": "/home/tlucanti/git/vk-test",
-    "file": "/home/tlucanti/git/vk-test/triangle.cpp",
-    "output": "/home/tlucanti/git/vk-test/triangle"
+    "directory": "/home/tlucanti/git/vulkan-test",
+    "file": "/home/tlucanti/git/vulkan-test/triangle.cpp",
+    "output": "/home/tlucanti/git/vulkan-test/triangle"
   }
 ]
