@@ -1,5 +1,5 @@
 
-CFLAGS	= -Wall -Wextra -std=c++17 -fdiagnostics-color=always
+CFLAGS	= -Wall -Wextra -Werror -std=c++17 -fdiagnostics-color=always
 LDFLAGS	= -lglfw -lvulkan
 
 CFLAGS += -g3 -O0
@@ -12,6 +12,8 @@ extentions:
 .PHONY: extentions
 
 triangle:
+	glslc triangle.vert -o vert.spv
+	glslc triangle.frag -o frag.spv
 	g++	$(CFLAGS) triangle.cpp $(LDFLAGS) -o triangle
 .PHONY: triangle
 
