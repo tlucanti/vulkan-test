@@ -109,6 +109,8 @@ private:
 	VkPipelineLayout pipelineLayout;
 	VkPipeline graphicsPipeline;
 	std::vector<VkFramebuffer> swapChainFramebuffers;
+	VkCommandPool commandPool;
+	VkCommandBuffer commandBuffer;
 
 	struct QueueFamilyIndices {
 		uint32_t graphicsFamily;
@@ -149,6 +151,8 @@ private:
 		createRenderPass();
 		createGraphicsPipeline();
 		createFramebuffers();
+		createCommandPool();
+		createCommandBuffer();
 	}
 
 	std::vector<const char *> getRequieredExtensions()
@@ -843,6 +847,76 @@ private:
 			CALL_VK(vkCreateFramebuffer(device, &framebufferCreateInfo, nullptr, &swapChainFramebuffers.at(i)),
 				"failed to create framebuffer");
 		}
+		std::cout << "created " << swapChainFramebuffers.size() << " frame buffers\n";
+	}
+
+	void createCommandPool(void)
+	{
+		QueueFamilyIndices queueFamilyIndices = findQueueFamilies(physicalDevice);
+
+		VkCommandPoolCreateInfo poolCreateInfo = {
+			.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+			.pNext = nullptr,
+			.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+			.queueFamilyIndex = queueFamilyIndices.graphicsFamily,
+		};
+
+		CALL_VK(vkCreateCommandPool(device, &poolCreateInfo, nullptr, &commandPool),
+			"failed to create command pool");
+	}
+
+	void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex)
+	{
+		VkCommandBufferBeginInfo beginInfo = {
+			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+			.pNext = nullptr,
+			.flags = 0,
+			.pInheritanceInfo = nullptr,
+		};
+
+		CALL_VK(vkBeginCommandBuffer(commandBuffer, &beginInfo),
+			"failed to begin recording command buffer");
+
+		VkClearValue clearColor = {{{ 0, 0, 0, 1 }}};
+
+		VkRenderPassBeginInfo renderPassInfo = {
+			.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+			.pNext = nullptr,
+			.renderPass = renderPass,
+			.framebuffer = swapChainFramebuffers[imageIndex],
+			.renderArea = {
+				.offset = { 0, 0 },
+				.extent = swapChainExtent,
+			},
+			.clearValueCount = 1,
+			.pClearValues = &clearColor,
+		};
+
+		vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
+
+		vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+
+		vkCmdEndRenderPass(commandBuffer);
+
+		CALL_VK(vkEndCommandBuffer(commandBuffer),
+			"failed to record command buffer");
+
+	}
+
+	void createCommandBuffer(void)
+	{
+		VkCommandBufferAllocateInfo allocInfo = {
+			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+			.pNext = nullptr,
+			.commandPool = commandPool,
+			.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+			.commandBufferCount = 1,
+		};
+
+		CALL_VK(vkAllocateCommandBuffers(device, &allocInfo, &commandBuffer),
+			"failed to allocated command buffer");
 	}
 
 	void printExtentions(void)
@@ -991,6 +1065,7 @@ private:
 		for (auto &imageView : swapChainImageViews) {
 			vkDestroyImageView(device, imageView, nullptr);
 		}
+		vkDestroyCommandPool(device, commandPool, nullptr);
 		vkDestroyPipeline(device, graphicsPipeline, nullptr);
 		vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
 		vkDestroyRenderPass(device, renderPass, nullptr);
