@@ -111,6 +111,9 @@ private:
 	std::vector<VkFramebuffer> swapChainFramebuffers;
 	VkCommandPool commandPool;
 	VkCommandBuffer commandBuffer;
+	VkSemaphore imageAvaliableSemaphore;
+	VkSemaphore renderFinishedSemaphore;
+	VkFence inFlightFence;
 
 	struct QueueFamilyIndices {
 		uint32_t graphicsFamily;
@@ -153,6 +156,7 @@ private:
 		createFramebuffers();
 		createCommandPool();
 		createCommandBuffer();
+		createSyncObjects();
 	}
 
 	std::vector<const char *> getRequieredExtensions()
@@ -602,6 +606,16 @@ private:
 			.pPreserveAttachments = nullptr,
 		};
 
+		VkSubpassDependency dependency = {
+			.srcSubpass = VK_SUBPASS_EXTERNAL,
+			.dstSubpass = 0,
+			.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+			.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+			.srcAccessMask = 0,
+			.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+			.dependencyFlags = 0,
+		};
+
 		VkRenderPassCreateInfo renderPassCreateInfo = {
 			.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
 			.pNext = nullptr,
@@ -610,8 +624,8 @@ private:
 			.pAttachments = &colorAttachment,
 			.subpassCount = 1,
 			.pSubpasses = &subpass,
-			.dependencyCount = 0,
-			.pDependencies = nullptr,
+			.dependencyCount = 1,
+			.pDependencies = &dependency,
 		};
 
 		CALL_VK(vkCreateRenderPass(device, &renderPassCreateInfo, nullptr, &renderPass),
@@ -919,6 +933,28 @@ private:
 			"failed to allocated command buffer");
 	}
 
+	void createSyncObjects(void)
+	{
+		VkSemaphoreCreateInfo semaphoreInfo = {
+			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+			.pNext = nullptr,
+			.flags = 0,
+		};
+
+		VkFenceCreateInfo fenceInfo = {
+			.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+			.pNext = nullptr,
+			.flags = VK_FENCE_CREATE_SIGNALED_BIT,
+		};
+
+		CALL_VK(vkCreateSemaphore(device, &semaphoreInfo, nullptr, &imageAvaliableSemaphore),
+			"failed to create image semaphore");
+		CALL_VK(vkCreateSemaphore(device, &semaphoreInfo, nullptr, &renderFinishedSemaphore),
+			"failed to create render semaphore");
+		CALL_VK(vkCreateFence(device, &fenceInfo, nullptr, &inFlightFence),
+			"failed to create render fence");
+	}
+
 	void printExtentions(void)
 	{
 		uint32_t extensionCount;
@@ -1045,34 +1081,99 @@ private:
 		return true;
 	}
 
+	void drawFrame(void)
+	{
+		uint32_t imageIndex;
+
+		CALL_VK(vkWaitForFences(device, 1, &inFlightFence, VK_TRUE, UINT64_MAX),
+			"failed to wait in render fence");
+		CALL_VK(vkResetFences(device, 1, &inFlightFence),
+			"failed to reset reset fence");
+
+		CALL_VK(vkAcquireNextImageKHR(device, swapChain, UINT64_MAX,
+					      imageAvaliableSemaphore, VK_NULL_HANDLE, &imageIndex),
+			"failed to acquire swap chain image");
+
+		CALL_VK(vkResetCommandBuffer(commandBuffer, 0),
+			"failed to reset command buffer");
+		recordCommandBuffer(commandBuffer, imageIndex);
+
+		VkSemaphore waitSemaphores[] = { imageAvaliableSemaphore };
+		VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+		VkSemaphore signalSemaphores[] = { renderFinishedSemaphore };
+		VkSubmitInfo submitInfo = {
+			.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+			.pNext = nullptr,
+			.waitSemaphoreCount = 1,
+			.pWaitSemaphores = waitSemaphores,
+			.pWaitDstStageMask = waitStages,
+			.commandBufferCount = 1,
+			.pCommandBuffers = &commandBuffer,
+			.signalSemaphoreCount = 1,
+			.pSignalSemaphores = signalSemaphores,
+		};
+
+		CALL_VK(vkQueueSubmit(graphicsQueue, 1, &submitInfo, inFlightFence),
+			"failed to submit draw command buffer to queue");
+
+		VkSwapchainKHR swapChains[] = { swapChain };
+
+		VkPresentInfoKHR presentInfo = {
+			.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+			.pNext = nullptr,
+			.waitSemaphoreCount = 1,
+			.pWaitSemaphores = signalSemaphores,
+			.swapchainCount = 1,
+			.pSwapchains = swapChains,
+			.pImageIndices = &imageIndex,
+			.pResults = nullptr,
+		};
+
+		CALL_VK(vkQueuePresentKHR(presentQueue, &presentInfo),
+			"failed to present image");
+	}
+
 	void mainLoop(void)
 	{
 		while (!glfwWindowShouldClose(this->window)) {
 			glfwPollEvents();
+			drawFrame();
 		}
 
+		vkDeviceWaitIdle(device);
 	}
 
 	void cleanup(void)
 	{
-		if (CONFIG_VALIDATION_LAYERS) {
-			DestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
-		}
-		glfwDestroyWindow(this->window);
+		vkDestroySemaphore(device, imageAvaliableSemaphore, nullptr);
+		vkDestroySemaphore(device, renderFinishedSemaphore, nullptr);
+		vkDestroyFence(device, inFlightFence, nullptr);
+
+		vkDestroyCommandPool(device, commandPool, nullptr);
+
 		for (auto &framebuffer : swapChainFramebuffers) {
 			vkDestroyFramebuffer(device, framebuffer, nullptr);
 		}
-		for (auto &imageView : swapChainImageViews) {
-			vkDestroyImageView(device, imageView, nullptr);
-		}
-		vkDestroyCommandPool(device, commandPool, nullptr);
+
 		vkDestroyPipeline(device, graphicsPipeline, nullptr);
 		vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
 		vkDestroyRenderPass(device, renderPass, nullptr);
+
+		for (auto &imageView : swapChainImageViews) {
+			vkDestroyImageView(device, imageView, nullptr);
+		}
+
 		vkDestroySwapchainKHR(device, swapChain, nullptr);
 		vkDestroyDevice(device, nullptr);
+
+		if (CONFIG_VALIDATION_LAYERS) {
+			DestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
+		}
+
 		vkDestroySurfaceKHR(instance, surface, nullptr);
 		vkDestroyInstance(instance, nullptr);
+
+		glfwDestroyWindow(this->window);
 		glfwTerminate();
 	}
 };
