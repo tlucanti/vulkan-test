@@ -15,6 +15,12 @@
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 600
 
+#ifndef CONFIG_VALIDATION_LAYERS
+# define CONFIG_VALIDATION_LAYERS true
+#endif
+
+#define MAX_FRAMES_IN_FLIGHT 2
+
 #if CONFIG_VALIDATION_LAYERS
 const std::vector<const char *> validationLayers = {
 	"VK_LAYER_KHRONOS_validation",
@@ -110,10 +116,11 @@ private:
 	VkPipeline graphicsPipeline;
 	std::vector<VkFramebuffer> swapChainFramebuffers;
 	VkCommandPool commandPool;
-	VkCommandBuffer commandBuffer;
-	VkSemaphore imageAvaliableSemaphore;
-	VkSemaphore renderFinishedSemaphore;
-	VkFence inFlightFence;
+	std::vector<VkCommandBuffer> commandBuffers;
+	std::vector<VkSemaphore> imageAvaliableSemaphores;
+	std::vector<VkSemaphore> renderFinishedSemaphores;
+	std::vector<VkFence> inFlightFences;
+	uint32_t currentFrame;
 
 	struct QueueFamilyIndices {
 		uint32_t graphicsFamily;
@@ -919,22 +926,28 @@ private:
 
 	}
 
-	void createCommandBuffer(void)
+	void createCommandBuffers(void)
 	{
+		commandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+
 		VkCommandBufferAllocateInfo allocInfo = {
 			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
 			.pNext = nullptr,
 			.commandPool = commandPool,
 			.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-			.commandBufferCount = 1,
+			.commandBufferCount = (uint32_t)commandBuffers.size(),
 		};
 
-		CALL_VK(vkAllocateCommandBuffers(device, &allocInfo, &commandBuffer),
+		CALL_VK(vkAllocateCommandBuffers(device, &allocInfo, &commandBuffers),
 			"failed to allocated command buffer");
 	}
 
 	void createSyncObjects(void)
 	{
+		imageAvaliableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+		renderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+		inFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
+
 		VkSemaphoreCreateInfo semaphoreInfo = {
 			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
 			.pNext = nullptr,
@@ -947,12 +960,14 @@ private:
 			.flags = VK_FENCE_CREATE_SIGNALED_BIT,
 		};
 
-		CALL_VK(vkCreateSemaphore(device, &semaphoreInfo, nullptr, &imageAvaliableSemaphore),
-			"failed to create image semaphore");
-		CALL_VK(vkCreateSemaphore(device, &semaphoreInfo, nullptr, &renderFinishedSemaphore),
-			"failed to create render semaphore");
-		CALL_VK(vkCreateFence(device, &fenceInfo, nullptr, &inFlightFence),
-			"failed to create render fence");
+		for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+			CALL_VK(vkCreateSemaphore(device, &semaphoreInfo, nullptr, &imageAvaliableSemaphores.at(i)),
+				"failed to create image semaphore");
+			CALL_VK(vkCreateSemaphore(device, &semaphoreInfo, nullptr, &renderFinishedSemaphores.at(i)),
+				"failed to create render semaphore");
+			CALL_VK(vkCreateFence(device, &fenceInfo, nullptr, &inFlightFences.at(i)),
+				"failed to create render fence");
+		}
 	}
 
 	void printExtentions(void)
@@ -1085,7 +1100,7 @@ private:
 	{
 		uint32_t imageIndex;
 
-		CALL_VK(vkWaitForFences(device, 1, &inFlightFence, VK_TRUE, UINT64_MAX),
+		CALL_VK(vkWaitForFences(device, 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX),
 			"failed to wait in render fence");
 		CALL_VK(vkResetFences(device, 1, &inFlightFence),
 			"failed to reset reset fence");
@@ -1135,6 +1150,8 @@ private:
 
 	void mainLoop(void)
 	{
+		currentFrame = 0;
+
 		while (!glfwWindowShouldClose(this->window)) {
 			glfwPollEvents();
 			drawFrame();
@@ -1145,9 +1162,11 @@ private:
 
 	void cleanup(void)
 	{
-		vkDestroySemaphore(device, imageAvaliableSemaphore, nullptr);
-		vkDestroySemaphore(device, renderFinishedSemaphore, nullptr);
-		vkDestroyFence(device, inFlightFence, nullptr);
+		for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+			vkDestroySemaphore(device, imageAvaliableSemaphores.at(i), nullptr);
+			vkDestroySemaphore(device, renderFinishedSemaphores.at(i), nullptr);
+			vkDestroyFence(device, inFlightFences.at(i), nullptr);
+		}
 
 		vkDestroyCommandPool(device, commandPool, nullptr);
 
@@ -1191,4 +1210,5 @@ int main()
 
 	return EXIT_SUCCESS;
 }
+
 
