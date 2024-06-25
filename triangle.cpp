@@ -162,7 +162,7 @@ private:
 		createGraphicsPipeline();
 		createFramebuffers();
 		createCommandPool();
-		createCommandBuffer();
+		createCommandBuffers();
 		createSyncObjects();
 	}
 
@@ -938,7 +938,7 @@ private:
 			.commandBufferCount = (uint32_t)commandBuffers.size(),
 		};
 
-		CALL_VK(vkAllocateCommandBuffers(device, &allocInfo, &commandBuffers),
+		CALL_VK(vkAllocateCommandBuffers(device, &allocInfo, commandBuffers.data()),
 			"failed to allocated command buffer");
 	}
 
@@ -1102,20 +1102,21 @@ private:
 
 		CALL_VK(vkWaitForFences(device, 1, &inFlightFences[currentFrame], VK_TRUE, UINT64_MAX),
 			"failed to wait in render fence");
-		CALL_VK(vkResetFences(device, 1, &inFlightFence),
+		CALL_VK(vkResetFences(device, 1, &inFlightFences[currentFrame]),
 			"failed to reset reset fence");
 
 		CALL_VK(vkAcquireNextImageKHR(device, swapChain, UINT64_MAX,
-					      imageAvaliableSemaphore, VK_NULL_HANDLE, &imageIndex),
+					      imageAvaliableSemaphores[currentFrame],
+					      VK_NULL_HANDLE, &imageIndex),
 			"failed to acquire swap chain image");
 
-		CALL_VK(vkResetCommandBuffer(commandBuffer, 0),
+		CALL_VK(vkResetCommandBuffer(commandBuffers[currentFrame], 0),
 			"failed to reset command buffer");
-		recordCommandBuffer(commandBuffer, imageIndex);
+		recordCommandBuffer(commandBuffers[currentFrame], imageIndex);
 
-		VkSemaphore waitSemaphores[] = { imageAvaliableSemaphore };
+		VkSemaphore waitSemaphores[] = { imageAvaliableSemaphores[currentFrame] };
 		VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
-		VkSemaphore signalSemaphores[] = { renderFinishedSemaphore };
+		VkSemaphore signalSemaphores[] = { renderFinishedSemaphores[currentFrame] };
 		VkSubmitInfo submitInfo = {
 			.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
 			.pNext = nullptr,
@@ -1123,12 +1124,12 @@ private:
 			.pWaitSemaphores = waitSemaphores,
 			.pWaitDstStageMask = waitStages,
 			.commandBufferCount = 1,
-			.pCommandBuffers = &commandBuffer,
+			.pCommandBuffers = &commandBuffers[currentFrame],
 			.signalSemaphoreCount = 1,
 			.pSignalSemaphores = signalSemaphores,
 		};
 
-		CALL_VK(vkQueueSubmit(graphicsQueue, 1, &submitInfo, inFlightFence),
+		CALL_VK(vkQueueSubmit(graphicsQueue, 1, &submitInfo, inFlightFences[currentFrame]),
 			"failed to submit draw command buffer to queue");
 
 		VkSwapchainKHR swapChains[] = { swapChain };
@@ -1146,6 +1147,8 @@ private:
 
 		CALL_VK(vkQueuePresentKHR(presentQueue, &presentInfo),
 			"failed to present image");
+
+		currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 	}
 
 	void mainLoop(void)
