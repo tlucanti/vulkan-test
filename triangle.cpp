@@ -1,16 +1,18 @@
 
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
+#include <glm/glm.hpp>
 
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
 #include <stdexcept>
 
+#include <array>
+#include <fstream>
 #include <set>
 #include <string>
 #include <vector>
-#include <fstream>
 
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 600
@@ -33,11 +35,17 @@ const std::vector<const char *> deviceExtensions = {
 	VK_KHR_SWAPCHAIN_EXTENSION_NAME,
 };
 
+__attribute__((__noreturn__))
+static inline void PANIC_VK(const std::string &message)
+{
+	throw std::runtime_error(message);
+}
+
 static inline void CALL_VK(VkResult result, std::string message)
 {
 	if (result != VK_SUCCESS) {
 		message += " (errorcode: " + std::to_string(result) + ")";
-		throw std::runtime_error(message);
+		PANIC_VK(message);
 	}
 }
 
@@ -68,7 +76,7 @@ DestroyDebugUtilsMessengerEXT(VkInstance instance,
 	if (func != nullptr) {
 		func(instance, debugMessenger, pAllocator);
 	} else {
-		throw std::runtime_error("vkDestroyDebugUtilsMessengerEXT function is not present");
+		PANIC_VK("vkDestroyDebugUtilsMessengerEXT function is not present");
 	}
 }
 
@@ -77,7 +85,7 @@ static std::vector<unsigned char> readFile(const std::string &fileName)
 	std::ifstream file(fileName, std::ios::ate | std::ios::binary);
 
 	if (!file.is_open()) {
-		throw std::runtime_error("failed to open file: " + fileName);
+		PANIC_VK("failed to open file: " + fileName);
 	}
 
 	std::vector<unsigned char> buffer(file.tellg());
@@ -86,6 +94,52 @@ static std::vector<unsigned char> readFile(const std::string &fileName)
 	file.read((char *)buffer.data(), buffer.size());
 	return buffer;
 }
+
+struct Vertex {
+	glm::vec2 pos;
+	glm::vec3 color;
+
+	Vertex(glm::vec2 pos, glm::vec3 color)
+		: pos(pos), color(color)
+	{}
+
+	static VkVertexInputBindingDescription getBindingDescription(void)
+	{
+		VkVertexInputBindingDescription bindingDescription = {
+			.binding = 0,
+			.stride = sizeof(Vertex),
+			.inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
+		};
+
+		return bindingDescription;
+	}
+
+	static std::array<VkVertexInputAttributeDescription, 2> getAttributeDescriptions(void)
+	{
+		std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions;
+
+		attributeDescriptions[0] = {
+			.location = 0,
+			.binding = 0,
+			.format = VK_FORMAT_R32G32_SFLOAT,
+			.offset = offsetof(Vertex, pos),
+		};
+		attributeDescriptions[1] = {
+			.location = 1,
+			.binding = 0,
+			.format = VK_FORMAT_R32G32B32_SFLOAT,
+			.offset = offsetof(Vertex, color),
+		};
+
+		return attributeDescriptions;
+	}
+};
+
+const std::vector<Vertex> vertices = {
+	Vertex(glm::vec2( 0.0f, -0.5f), glm::vec3(1, 0, 0)),
+	Vertex(glm::vec2( 0.5f,  0.5f), glm::vec3(0, 1, 0)),
+	Vertex(glm::vec2(-0.5f,  0.5f), glm::vec3(0, 0, 1)),
+};
 
 class HelloTriangleApplication {
 public:
@@ -98,6 +152,7 @@ public:
 	}
 
 private:
+
 	GLFWwindow *window;
 	VkInstance instance;
 	VkDebugUtilsMessengerEXT debugMessenger;
@@ -116,6 +171,8 @@ private:
 	VkPipeline graphicsPipeline;
 	std::vector<VkFramebuffer> swapChainFramebuffers;
 	VkCommandPool commandPool;
+	VkBuffer vertexBuffer;
+	VkDeviceMemory vertexBufferMemory;
 	std::vector<VkCommandBuffer> commandBuffers;
 	std::vector<VkSemaphore> imageAvaliableSemaphores;
 	std::vector<VkSemaphore> renderFinishedSemaphores;
@@ -157,7 +214,7 @@ private:
 	void initVulkan(void)
 	{
 		if (CONFIG_VALIDATION_LAYERS && not checkValidationLayerSupport()) {
-			throw std::runtime_error("validation layers requested, but not available!");
+			PANIC_VK("validation layers requested, but not available!");
 		}
 		frameBufferResized = false;
 
@@ -174,6 +231,8 @@ private:
 		createGraphicsPipeline();
 		createFramebuffers();
 		createCommandPool();
+		printMemoryTypes();
+		createVertexBuffer();
 		createCommandBuffers();
 		createSyncObjects();
 	}
@@ -372,7 +431,7 @@ private:
 			     not swapChainSupport.presentModes.empty());
 
 		if (deviceOk) {
-			std::cout << "selecting physical device " << deviceProperties.deviceName << '\n';
+			std::cout << "selecting physical device: " << deviceProperties.deviceName << '\n';
 		}
 		return deviceOk;
 	}
@@ -387,7 +446,7 @@ private:
 			"failed to get physical devices count");
 
 		if (deviceCount == 0) {
-			throw std::runtime_error("no GPU devices with vulkan support");
+			PANIC_VK("no GPU devices with vulkan support");
 		}
 
 		devices.resize(deviceCount);
@@ -402,7 +461,7 @@ private:
 		}
 
 		if (physicalDevice == VK_NULL_HANDLE) {
-			throw std::runtime_error("failed to find sutable GPU");
+			PANIC_VK("failed to find sutable GPU");
 		}
 	}
 
@@ -713,6 +772,9 @@ private:
 		VkShaderModule vertShaderModule = createShaderModule(vertShaderCode);
 		VkShaderModule fragShaderModule = createShaderModule(fragShaderCode);
 
+		VkVertexInputBindingDescription bindingDescription = Vertex::getBindingDescription();
+		auto attributeDescriptions = Vertex::getAttributeDescriptions();
+
 		VkPipelineShaderStageCreateInfo vertShaderStageCreateInfo = {
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
 			.pNext = nullptr,
@@ -754,10 +816,10 @@ private:
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
 			.pNext = nullptr,
 			.flags = 0,
-			.vertexBindingDescriptionCount = 0,
-			.pVertexBindingDescriptions = nullptr,
-			.vertexAttributeDescriptionCount = 0,
-			.pVertexAttributeDescriptions = nullptr,
+			.vertexBindingDescriptionCount = 1,
+			.pVertexBindingDescriptions = &bindingDescription,
+			.vertexAttributeDescriptionCount = attributeDescriptions.size(),
+			.pVertexAttributeDescriptions = attributeDescriptions.data(),
 		};
 
 		VkPipelineInputAssemblyStateCreateInfo inputAssemblyCreateInfo = {
@@ -958,17 +1020,94 @@ private:
 			.pClearValues = &clearColor,
 		};
 
+		VkBuffer vertexBuffers[] = { vertexBuffer };
+		VkDeviceSize offsets[] = { 0 };
+
 		vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
 		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
 
-		vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+		vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+
+		vkCmdDraw(commandBuffer, vertices.size(), 1, 0, 0);
 
 		vkCmdEndRenderPass(commandBuffer);
 
 		CALL_VK(vkEndCommandBuffer(commandBuffer),
 			"failed to record command buffer");
 
+	}
+
+	void printMemoryTypes(void)
+	{
+		VkPhysicalDeviceMemoryProperties memProperties;
+
+		vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memProperties);
+
+		std::cout << "avaliable memory types\n";
+		for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
+			std::cout << "\tflags: " << memProperties.memoryTypes[i].propertyFlags << '\n';
+		}
+		std::cout << '\n';
+	}
+
+	uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties)
+	{
+		VkPhysicalDeviceMemoryProperties memProperties;
+
+		vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memProperties);
+		for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
+			if ((typeFilter & (1 << i)) &&
+			    (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
+				return i;
+			}
+		}
+
+		PANIC_VK("failed to find suitable memory type");
+	}
+
+
+	void createVertexBuffer(void)
+	{
+		VkMemoryRequirements memRequirements;
+		void *gpuMemory;
+		uint32_t typeIndex;
+
+		VkBufferCreateInfo bufferCreateInfo = {
+			.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+			.pNext = nullptr,
+			.flags = 0,
+			.size = sizeof(Vertex) * vertices.size(),
+			.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+			.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+			.queueFamilyIndexCount = 0,
+			.pQueueFamilyIndices = nullptr,
+		};
+
+		CALL_VK(vkCreateBuffer(device, &bufferCreateInfo, nullptr, &vertexBuffer),
+			"failed to create vertex buffer");
+
+		vkGetBufferMemoryRequirements(device, vertexBuffer, &memRequirements);
+		typeIndex = findMemoryType(memRequirements.memoryTypeBits,
+				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+		VkMemoryAllocateInfo allocInfo = {
+			.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+			.pNext = nullptr,
+			.allocationSize = memRequirements.size,
+			.memoryTypeIndex = typeIndex,
+		};
+
+		CALL_VK(vkAllocateMemory(device, &allocInfo, nullptr, &vertexBufferMemory),
+			"failed to allocate vertex buffer memory");
+
+		CALL_VK(vkBindBufferMemory(device, vertexBuffer, vertexBufferMemory, 0),
+			"failed to bind vertex buffer memory");
+
+		CALL_VK(vkMapMemory(device, vertexBufferMemory, 0, bufferCreateInfo.size, 0, &gpuMemory),
+			"failed to map device memory");
+		memcpy(gpuMemory, vertices.data(), bufferCreateInfo.size);
+		vkUnmapMemory(device, vertexBufferMemory);
 	}
 
 	void createCommandBuffers(void)
@@ -1044,9 +1183,11 @@ private:
 		CALL_VK(vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, avaliableExtensions.data()),
 			"failed to get device extensions");
 
+		std::cout << "\t\t";
 		for (const auto &extension : avaliableExtensions) {
-			std::cout << "\t\t" << extension.extensionName << '\n';
+			std::cout << extension.extensionName << ", ";
 		}
+		std::cout << '\n';
 	}
 
 	void printPhysicalDevices(void)
@@ -1105,7 +1246,7 @@ private:
 				std::cerr << "[VALIDATION ERROR]: ";
 				break;
 			default:
-				throw std::runtime_error("unknown message severity");
+				PANIC_VK("unknown message severity");
 		}
 		std::cerr << pCallbackData->pMessage << '\n';
 
@@ -1233,6 +1374,8 @@ private:
 		vkDestroyCommandPool(device, commandPool, nullptr);
 
 		cleanupSwapChain();
+		vkDestroyBuffer(device, vertexBuffer, nullptr);
+		vkFreeMemory(device, vertexBufferMemory, nullptr);
 
 		vkDestroyPipeline(device, graphicsPipeline, nullptr);
 		vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
