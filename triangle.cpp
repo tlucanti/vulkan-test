@@ -1066,30 +1066,29 @@ private:
 		PANIC_VK("failed to find suitable memory type");
 	}
 
-
-	void createVertexBuffer(void)
+	void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage,
+			  VkMemoryPropertyFlags properties, VkBuffer *pBuffer,
+			  VkDeviceMemory *pBufferMemory, const char *name)
 	{
 		VkMemoryRequirements memRequirements;
-		void *gpuMemory;
 		uint32_t typeIndex;
 
 		VkBufferCreateInfo bufferCreateInfo = {
 			.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
 			.pNext = nullptr,
 			.flags = 0,
-			.size = sizeof(Vertex) * vertices.size(),
-			.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+			.size = size,
+			.usage = usage,
 			.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
 			.queueFamilyIndexCount = 0,
 			.pQueueFamilyIndices = nullptr,
 		};
 
-		CALL_VK(vkCreateBuffer(device, &bufferCreateInfo, nullptr, &vertexBuffer),
-			"failed to create vertex buffer");
+		CALL_VK(vkCreateBuffer(device, &bufferCreateInfo, nullptr, pBuffer),
+			std::string("failed to create ") + name);
 
-		vkGetBufferMemoryRequirements(device, vertexBuffer, &memRequirements);
-		typeIndex = findMemoryType(memRequirements.memoryTypeBits,
-				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+		vkGetBufferMemoryRequirements(device, *pBuffer, &memRequirements);
+		typeIndex = findMemoryType(memRequirements.memoryTypeBits, properties);
 
 		VkMemoryAllocateInfo allocInfo = {
 			.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
@@ -1098,15 +1097,25 @@ private:
 			.memoryTypeIndex = typeIndex,
 		};
 
-		CALL_VK(vkAllocateMemory(device, &allocInfo, nullptr, &vertexBufferMemory),
-			"failed to allocate vertex buffer memory");
+		CALL_VK(vkAllocateMemory(device, &allocInfo, nullptr, pBufferMemory),
+			std::string("failed to allocate ") + name + " memory");
 
-		CALL_VK(vkBindBufferMemory(device, vertexBuffer, vertexBufferMemory, 0),
-			"failed to bind vertex buffer memory");
+		CALL_VK(vkBindBufferMemory(device, *pBuffer, *pBufferMemory, 0),
+			std::string("failed to bind ") + name + " memory");
+	}
 
-		CALL_VK(vkMapMemory(device, vertexBufferMemory, 0, bufferCreateInfo.size, 0, &gpuMemory),
+	void createVertexBuffer(void)
+	{
+		VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
+		void *gpuMemory;
+
+		createBuffer(bufferSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+			     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+			     &vertexBuffer, &vertexBufferMemory, "vertex buffer");
+
+		CALL_VK(vkMapMemory(device, vertexBufferMemory, 0, bufferSize, 0, &gpuMemory),
 			"failed to map device memory");
-		memcpy(gpuMemory, vertices.data(), bufferCreateInfo.size);
+		memcpy(gpuMemory, vertices.data(), bufferSize);
 		vkUnmapMemory(device, vertexBufferMemory);
 	}
 

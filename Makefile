@@ -1,5 +1,5 @@
 
-CC = c++
+CC = clang++
 GLSLC = glslc
 
 CFLAGS	= -Wall -Wextra -Werror -std=c++17 -fdiagnostics-color=always
