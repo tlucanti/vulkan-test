@@ -1109,14 +1109,82 @@ private:
 		VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
 		void *gpuMemory;
 
-		createBuffer(bufferSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-			     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-			     &vertexBuffer, &vertexBufferMemory, "vertex buffer");
+		VkBuffer stagingBuffer;
+		VkDeviceMemory stagingBufferMemory;
 
-		CALL_VK(vkMapMemory(device, vertexBufferMemory, 0, bufferSize, 0, &gpuMemory),
+		createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+			     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+			     &stagingBuffer, &stagingBufferMemory, "staging vertex buffer");
+
+		CALL_VK(vkMapMemory(device, stagingBufferMemory, 0, bufferSize, 0, &gpuMemory),
 			"failed to map device memory");
 		memcpy(gpuMemory, vertices.data(), bufferSize);
-		vkUnmapMemory(device, vertexBufferMemory);
+		vkUnmapMemory(device, stagingBufferMemory);
+
+		createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+			     VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &vertexBuffer, &vertexBufferMemory,
+			     "vertex buffer");
+
+		copyBuffer(stagingBuffer, vertexBuffer, bufferSize);
+
+		vkDestroyBuffer(device, stagingBuffer, nullptr);
+		vkFreeMemory(device, stagingBufferMemory, nullptr);
+	}
+
+	void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size)
+	{
+		VkCommandBuffer commandBuffer;
+
+		VkCommandBufferAllocateInfo allocInfo = {
+			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+			.pNext = nullptr,
+			.commandPool = commandPool,
+			.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+			.commandBufferCount = 1,
+		};
+
+		VkCommandBufferBeginInfo beginInfo = {
+			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+			.pNext = nullptr,
+			.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+			.pInheritanceInfo = nullptr,
+		};
+
+		VkBufferCopy copyRegion = {
+			.srcOffset = 0,
+			.dstOffset = 0,
+			.size = size,
+		};
+
+		VkSubmitInfo submitInfo = {
+			.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+			.pNext = nullptr,
+			.waitSemaphoreCount = 0,
+			.pWaitSemaphores = nullptr,
+			.pWaitDstStageMask = nullptr,
+			.commandBufferCount = 1,
+			.pCommandBuffers = &commandBuffer,
+			.signalSemaphoreCount = 0,
+			.pSignalSemaphores = nullptr,
+		};
+
+		CALL_VK(vkAllocateCommandBuffers(device, &allocInfo, &commandBuffer),
+			"failed to allocate copy-buffer command buffer");
+
+		CALL_VK(vkBeginCommandBuffer(commandBuffer, &beginInfo),
+			"failed to begin copy-buffer command buffer");
+
+		vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
+
+		CALL_VK(vkEndCommandBuffer(commandBuffer),
+			"failed to end copy-buffer comand buffer");
+
+		CALL_VK(vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE),
+			"failed to submit copy-buffer queue");
+		CALL_VK(vkQueueWaitIdle(graphicsQueue),
+			"failed to flush copy-buffer queue");
+
+		vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
 	}
 
 	void createCommandBuffers(void)
