@@ -136,9 +136,14 @@ struct Vertex {
 };
 
 const std::vector<Vertex> vertices = {
-	Vertex(glm::vec2( 0.0f, -0.5f), glm::vec3(1, 0, 0)),
-	Vertex(glm::vec2( 0.5f,  0.5f), glm::vec3(0, 1, 0)),
+	Vertex(glm::vec2(-0.5f, -0.5f), glm::vec3(1, 0, 0)),
+	Vertex(glm::vec2( 0.5f, -0.5f), glm::vec3(0, 1, 0)),
+	Vertex(glm::vec2( 0.5f,  0.5f), glm::vec3(1, 1, 1)),
 	Vertex(glm::vec2(-0.5f,  0.5f), glm::vec3(0, 0, 1)),
+};
+
+const std::vector<uint16_t> indices = {
+	0, 1, 2, 2, 3, 0
 };
 
 class HelloTriangleApplication {
@@ -172,7 +177,9 @@ private:
 	std::vector<VkFramebuffer> swapChainFramebuffers;
 	VkCommandPool commandPool;
 	VkBuffer vertexBuffer;
+	VkBuffer indexBuffer;
 	VkDeviceMemory vertexBufferMemory;
+	VkDeviceMemory indexBufferMemory;
 	std::vector<VkCommandBuffer> commandBuffers;
 	std::vector<VkSemaphore> imageAvaliableSemaphores;
 	std::vector<VkSemaphore> renderFinishedSemaphores;
@@ -233,6 +240,7 @@ private:
 		createCommandPool();
 		printMemoryTypes();
 		createVertexBuffer();
+		createIndexBuffer();
 		createCommandBuffers();
 		createSyncObjects();
 	}
@@ -1028,8 +1036,9 @@ private:
 		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
 
 		vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+		vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT16);
 
-		vkCmdDraw(commandBuffer, vertices.size(), 1, 0, 0);
+		vkCmdDrawIndexed(commandBuffer, indices.size(), 1, 0, 0, 0);
 
 		vkCmdEndRenderPass(commandBuffer);
 
@@ -1126,6 +1135,33 @@ private:
 			     "vertex buffer");
 
 		copyBuffer(stagingBuffer, vertexBuffer, bufferSize);
+
+		vkDestroyBuffer(device, stagingBuffer, nullptr);
+		vkFreeMemory(device, stagingBufferMemory, nullptr);
+	}
+
+	void createIndexBuffer(void)
+	{
+		VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
+		void *gpuMemory;
+
+		VkBuffer stagingBuffer;
+		VkDeviceMemory stagingBufferMemory;
+
+		createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+			     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+			     &stagingBuffer, &stagingBufferMemory, "staging index buffer");
+
+		CALL_VK(vkMapMemory(device, stagingBufferMemory, 0, bufferSize, 0, &gpuMemory),
+			"failed to map device memory");
+		memcpy(gpuMemory, indices.data(), bufferSize);
+		vkUnmapMemory(device, stagingBufferMemory);
+
+		createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+			     VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &indexBuffer, &indexBufferMemory,
+			     "index buffer");
+
+		copyBuffer(stagingBuffer, indexBuffer, bufferSize);
 
 		vkDestroyBuffer(device, stagingBuffer, nullptr);
 		vkFreeMemory(device, stagingBufferMemory, nullptr);
@@ -1452,7 +1488,9 @@ private:
 
 		cleanupSwapChain();
 		vkDestroyBuffer(device, vertexBuffer, nullptr);
+		vkDestroyBuffer(device, indexBuffer, nullptr);
 		vkFreeMemory(device, vertexBufferMemory, nullptr);
+		vkFreeMemory(device, indexBufferMemory, nullptr);
 
 		vkDestroyPipeline(device, graphicsPipeline, nullptr);
 		vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
