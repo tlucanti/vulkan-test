@@ -547,10 +547,12 @@ private:
 	{
 		for (const auto &presentMode : avaliablePresentModes) {
 			if (presentMode == VK_PRESENT_MODE_MAILBOX_KHR) {
+				std::cout << "using present mode: " << "VK_PRESENT_MODE_MAILBOX_KHR\n";
 				return presentMode;
 			}
 		}
 
+		std::cout << "using present mode: " << "VK_PRESENT_MODE_FIFO_KHR\n";
 		return VK_PRESENT_MODE_FIFO_KHR;
 	}
 
@@ -564,7 +566,7 @@ private:
 		width = std::max(width, capabilities.minImageExtent.width);
 		width = std::min(width, capabilities.maxImageExtent.width);
 		height = std::max(height, capabilities.minImageExtent.height);
-		height = std::min(height, capabilities.maxImageExtent.width);
+		height = std::min(height, capabilities.maxImageExtent.height);
 
 		extent.width = width;
 		extent.height = height;
@@ -585,6 +587,7 @@ private:
 		    imageCount > swapChainSupport.capabilities.maxImageCount) {
 			imageCount = swapChainSupport.capabilities.minImageCount;
 		}
+		std::cout << "using " << imageCount << " images in swap chain\n";
 
 		VkSwapchainCreateInfoKHR createInfo = {
 			.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
@@ -807,18 +810,18 @@ private:
 			vertShaderStageCreateInfo, fragShaderStageCreateInfo
 		};
 
-		// std::vector<VkDynamicState> dynamicStates = {
-		// 	VK_DYNAMIC_STATE_VIEWPORT,
-		// 	VK_DYNAMIC_STATE_SCISSOR,
-		// };
-		//
-		// VkPipelineDynamicStateCreateInfo dynamicStateCreateInfo = {
-		// 	.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-		// 	.pNext = nullptr,
-		// 	.flags = 0,
-		// 	.dynamicStateCount = (uint32_t)dynamicStates.size(),
-		// 	.pDynamicStates = dynamicStates.data(),
-		// };
+		std::vector<VkDynamicState> dynamicStates = {
+			VK_DYNAMIC_STATE_VIEWPORT,
+			VK_DYNAMIC_STATE_SCISSOR,
+		};
+
+		VkPipelineDynamicStateCreateInfo dynamicStateCreateInfo = {
+			.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+			.pNext = nullptr,
+			.flags = 0,
+			.dynamicStateCount = (uint32_t)dynamicStates.size(),
+			.pDynamicStates = dynamicStates.data(),
+		};
 
 		VkPipelineVertexInputStateCreateInfo vertexInputStateCreateInfo = {
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
@@ -838,28 +841,14 @@ private:
 			.primitiveRestartEnable = VK_FALSE,
 		};
 
-		VkViewport viewport = {
-			.x = 0,
-			.y = 0,
-			.width = (float)swapChainExtent.width,
-			.height = (float)swapChainExtent.height,
-			.minDepth = 0,
-			.maxDepth = 1,
-		};
-
-		VkRect2D scissor = {
-			.offset = { 0, 0 },
-			.extent = swapChainExtent,
-		};
-
 		VkPipelineViewportStateCreateInfo viewportStateCreateInfo = {
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
 			.pNext = nullptr,
 			.flags = 0,
 			.viewportCount = 1,
-			.pViewports = &viewport,
+			.pViewports = nullptr,
 			.scissorCount = 1,
-			.pScissors = &scissor,
+			.pScissors = nullptr,
 		};
 
 		VkPipelineRasterizationStateCreateInfo rasterizer = {
@@ -942,7 +931,7 @@ private:
 			.pMultisampleState = &multisampling,
 			.pDepthStencilState = nullptr,
 			.pColorBlendState = &colorBlending,
-			.pDynamicState = nullptr,
+			.pDynamicState = &dynamicStateCreateInfo,
 			.layout = pipelineLayout,
 			.renderPass = renderPass,
 			.subpass = 0,
@@ -1013,7 +1002,7 @@ private:
 		CALL_VK(vkBeginCommandBuffer(commandBuffer, &beginInfo),
 			"failed to begin recording command buffer");
 
-		VkClearValue clearColor = {{{ 0, 0, 0, 1 }}};
+		VkClearValue clearColor = {{{ 0.1f, 0.1f, 0.1f, 1 }}};
 
 		VkRenderPassBeginInfo renderPassInfo = {
 			.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
@@ -1028,6 +1017,20 @@ private:
 			.pClearValues = &clearColor,
 		};
 
+		VkViewport viewport = {
+			.x = 0,
+			.y = 0,
+			.width = (float)swapChainExtent.width,
+			.height = (float)swapChainExtent.height,
+			.minDepth = 0,
+			.maxDepth = 1,
+		};
+
+		VkRect2D scissor = {
+			.offset = { 0, 0 },
+			.extent = swapChainExtent,
+		};
+
 		VkBuffer vertexBuffers[] = { vertexBuffer };
 		VkDeviceSize offsets[] = { 0 };
 
@@ -1037,6 +1040,9 @@ private:
 
 		vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
 		vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT16);
+
+		vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+		vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
 		vkCmdDrawIndexed(commandBuffer, indices.size(), 1, 0, 0, 0);
 
