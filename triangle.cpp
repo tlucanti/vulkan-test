@@ -3,8 +3,13 @@
 #include <GLFW/glfw3.h>
 
 #define GLM_FORCE_RADIANS
+#define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+
+#define STB_IMAGE_IMPLEMENTATION
+#define STBI_ONLY_PNG
+#include <stb_image.h>
 
 #include <cstdlib>
 #include <cstring>
@@ -101,7 +106,7 @@ static std::vector<unsigned char> readFile(const std::string &fileName)
 
 struct Vertex {
 	alignas(16) glm::vec2 pos;
-	glm::vec3 color;
+	alignas(16) glm::vec3 color;
 
 	Vertex(glm::vec2 pos, glm::vec3 color)
 		: pos(pos), color(color)
@@ -255,6 +260,7 @@ private:
 		createGraphicsPipeline();
 		createFramebuffers();
 		createCommandPool();
+		createTextureImage();
 		printMemoryTypes();
 		createVertexBuffer();
 		createIndexBuffer();
@@ -1019,6 +1025,50 @@ private:
 		std::cout << "created " << swapChainFramebuffers.size() << " frame buffers\n";
 	}
 
+	void createTextureImage(void)
+	{
+		int texWidth, texHeight, texChannels;
+		stbi_uc *pixels;
+		VkDeviceSize imageSize;
+
+		VkBuffer stagingBuffer;
+		VkDeviceMemory stagingBufferMemory;
+		void *gpuMemory;
+
+		VkImage textureImage;
+		VkDeviceMemory textureImageMemory;
+
+		pixels = stbi_load("textures/texture.png",&texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+		imageSize = texWidth * texHeight * 4;
+
+		if (pixels == nullptr) {
+			PANIC_VK("failed to load texture image");
+		}
+
+		createBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+			     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+			     &stagingBuffer, &stagingBufferMemory, "staging texture buffer");
+
+		vkMapMemory(device, stagingBufferMemory, 0, imageSize, 0, &gpuMemory);
+		memcpy(gpuMemory, pixels, imageSize);
+		vkUnmapMemory(device, stagingBufferMemory);
+
+		stbi_image_free(pixels);
+
+		createImage(texWidth, texHeight, VK_FORMAT_R8G8B8_SRGB, VK_IMAGE_TILING_OPTIMAL,
+			    VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+			    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &textureImage, &textureImageMemory,
+			    "texture image");
+		transitionImageLayout(textureImage, VK_FORMAT_R8G8B8_SRGB,
+				      VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+		copyBufferToImage(stagingBuffer, textureImage, texWidth, texHeight);
+		transitionImageLayout(textureImage, VK_FORMAT_R8G8B8_SRGB,
+				      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+		vkDestroyBuffer(device, stagingBuffer, nullptr);
+		vkFreeMemory(device, stagingBufferMemory, nullptr);
+	}
+
 	void createCommandPool(void)
 	{
 		QueueFamilyIndices queueFamilyIndices = findQueueFamilies(physicalDevice);
@@ -1166,6 +1216,54 @@ private:
 			std::string("failed to bind ") + name + " memory");
 	}
 
+	void createImage(uint32_t width, uint32_t height, VkFormat format,
+			 VkImageTiling tiling, VkImageUsageFlags usage,
+			 VkMemoryPropertyFlags properties, VkImage *pImage,
+			 VkDeviceMemory *pImageMemory, const char *name)
+	{
+		VkMemoryRequirements memRequirements;
+
+		VkImageCreateInfo imageCreateInfo = {
+			.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+			.pNext = nullptr,
+			.flags = 0,
+			.imageType = VK_IMAGE_TYPE_2D,
+			.format = format,
+			.extent = {
+				.width = width,
+				.height = height,
+				.depth = 1,
+			},
+			.mipLevels = 1,
+			.arrayLayers = 1,
+			.samples = VK_SAMPLE_COUNT_1_BIT,
+			.tiling = tiling,
+			.usage = usage,
+			.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+			.queueFamilyIndexCount = 0,
+			.pQueueFamilyIndices = 0,
+			.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+		};
+
+		CALL_VK(vkCreateImage(device, &imageCreateInfo, nullptr, pImage),
+			std::string("failed to create ") + name);
+
+		vkGetImageMemoryRequirements(device, *pImage, &memRequirements);
+
+		VkMemoryAllocateInfo memAllocInfo = {
+			.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+			.pNext = nullptr,
+			.allocationSize = memRequirements.size,
+			.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, properties),
+		};
+
+		CALL_VK(vkAllocateMemory(device, &memAllocInfo, nullptr, pImageMemory),
+			std::string("failed to allocate ") + name + " memory");
+
+		CALL_VK(vkBindImageMemory(device, *pImage, *pImageMemory, 0),
+			std::string("failed to bind ") + name + " memory");
+	}
+
 	void createVertexBuffer(void)
 	{
 		VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
@@ -1240,6 +1338,98 @@ private:
 
 	void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size)
 	{
+		VkCommandBuffer commandBuffer = beginSingleTimeCommands();
+
+		VkBufferCopy copyRegion = {
+			.srcOffset = 0,
+			.dstOffset = 0,
+			.size = size,
+		};
+
+		vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
+
+		endSingleTimeCommands(commandBuffer);
+	}
+
+	void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height)
+	{
+		VkCommandBuffer commandBuffer = beginSingleTimeCommands();
+
+		VkBufferImageCopy region = {
+			.bufferOffset = 0,
+			.bufferRowLength = 0,
+			.bufferImageHeight = 0,
+			.imageSubresource = {
+				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				.mipLevel = 0,
+				.baseArrayLayer = 0,
+				.layerCount = 1,
+
+			},
+			.imageOffset = { 0, 0, 0 },
+			.imageExtent = { width, height, 1 },
+		};
+
+		vkCmdCopyBufferToImage(commandBuffer, buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+
+		endSingleTimeCommands(commandBuffer);
+	}
+
+	void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout)
+	{
+		(void)format;
+		VkCommandBuffer commandBuffer = beginSingleTimeCommands();
+
+		VkImageMemoryBarrier barrier = {
+			.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+			.pNext = nullptr,
+			.srcAccessMask = 0,
+			.dstAccessMask = 0,
+			.oldLayout = oldLayout,
+			.newLayout = newLayout,
+			.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+			.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+			.image = image,
+			.subresourceRange = {
+				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				.baseMipLevel = 0,
+				.levelCount = 1,
+				.baseArrayLayer = 0,
+				.layerCount = 1,
+			},
+		};
+
+		VkPipelineStageFlags srcStage;
+		VkPipelineStageFlags dstStage;
+
+		if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED &&
+		    newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
+			barrier.srcAccessMask = 0;
+			barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+
+			srcStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+			dstStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+		} else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL &&
+			   newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+			barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+			barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+			srcStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+			dstStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+		} else {
+			PANIC_VK("unsupported layout transition");
+		}
+
+		vkCmdPipelineBarrier(commandBuffer, srcStage, dstStage, 0,
+				     0, nullptr,
+				     0, nullptr,
+				     1, &barrier);
+
+		endSingleTimeCommands(commandBuffer);
+	}
+
+	VkCommandBuffer beginSingleTimeCommands(void)
+	{
 		VkCommandBuffer commandBuffer;
 
 		VkCommandBufferAllocateInfo allocInfo = {
@@ -1257,12 +1447,17 @@ private:
 			.pInheritanceInfo = nullptr,
 		};
 
-		VkBufferCopy copyRegion = {
-			.srcOffset = 0,
-			.dstOffset = 0,
-			.size = size,
-		};
+		CALL_VK(vkAllocateCommandBuffers(device, &allocInfo, &commandBuffer),
+			"failed to allocate single-time buffer command buffer");
 
+		CALL_VK(vkBeginCommandBuffer(commandBuffer, &beginInfo),
+			"failed to begin single-time buffer command buffer");
+
+		return commandBuffer;
+	}
+
+	void endSingleTimeCommands(VkCommandBuffer commandBuffer)
+	{
 		VkSubmitInfo submitInfo = {
 			.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
 			.pNext = nullptr,
@@ -1275,21 +1470,13 @@ private:
 			.pSignalSemaphores = nullptr,
 		};
 
-		CALL_VK(vkAllocateCommandBuffers(device, &allocInfo, &commandBuffer),
-			"failed to allocate copy-buffer command buffer");
-
-		CALL_VK(vkBeginCommandBuffer(commandBuffer, &beginInfo),
-			"failed to begin copy-buffer command buffer");
-
-		vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
-
 		CALL_VK(vkEndCommandBuffer(commandBuffer),
-			"failed to end copy-buffer comand buffer");
+			"failed to end single-time commandBuffer");
 
 		CALL_VK(vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE),
-			"failed to submit copy-buffer queue");
+			"failed to submit single-time buffer queue");
 		CALL_VK(vkQueueWaitIdle(graphicsQueue),
-			"failed to flush copy-buffer queue");
+			"failed to flush single-time buffer queue");
 
 		vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
 	}
@@ -1636,6 +1823,9 @@ private:
 
 		vkDestroyCommandPool(device, commandPool, nullptr);
 		cleanupSwapChain();
+
+		vkDestroyImage(device, textureImage, nullptr);
+		vkFreeMemory(device, textureImageMemory, nullptr);
 
 		for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
 			vkDestroyBuffer(device, uniformBuffers[i], nullptr);

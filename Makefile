@@ -18,7 +18,7 @@ extentions:
 triangle:
 	$(GLSLC) shaders/triangle.vert -o vert.spv
 	$(GLSLC) shaders/triangle.frag -o frag.spv
-	$(CC) $(CFLAGS) triangle.cpp $(LDFLAGS) -o triangle
+	$(CC) $(CFLAGS) $(INCLUDE) triangle.cpp $(LDFLAGS) -o triangle
 .PHONY: triangle
 
 stb_image:
