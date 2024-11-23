@@ -186,6 +186,10 @@ private:
 	VkFormat swapChainImageFormat;
 	VkExtent2D swapChainExtent;
 	std::vector<VkImageView> swapChainImageViews;
+	VkImage textureImage;
+	VkDeviceMemory textureImageMemory;
+	VkImageView textureImageView;
+	VkSampler textureSampler;
 	VkRenderPass renderPass;
 	VkDescriptorSetLayout descriptorSetLayout;
 	VkDescriptorPool descriptorPool;
@@ -261,6 +265,8 @@ private:
 		createFramebuffers();
 		createCommandPool();
 		createTextureImage();
+		createTextureImageView();
+		createTextureSampler();
 		printMemoryTypes();
 		createVertexBuffer();
 		createIndexBuffer();
@@ -691,36 +697,80 @@ private:
 		// TODO: check compatibility with render pass and recreate it if needed
 	}
 
+	VkImageView createImageView(VkImage image, VkFormat format)
+	{
+		VkImageViewCreateInfo imageViewCreateInfo = {
+			.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+			.pNext = nullptr,
+			.flags = 0,
+			.image = image,
+			.viewType = VK_IMAGE_VIEW_TYPE_2D,
+			.format = format,
+			.components = {
+				.r = VK_COMPONENT_SWIZZLE_IDENTITY,
+				.g = VK_COMPONENT_SWIZZLE_IDENTITY,
+				.b = VK_COMPONENT_SWIZZLE_IDENTITY,
+				.a = VK_COMPONENT_SWIZZLE_IDENTITY,
+			},
+			.subresourceRange = {
+				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				.baseMipLevel = 0,
+				.levelCount = 1,
+				.baseArrayLayer = 0,
+				.layerCount = 1,
+			},
+		};
+
+		VkImageView imageView;
+		CALL_VK(vkCreateImageView(device, &imageViewCreateInfo, nullptr, &imageView),
+			"failed to create image view");
+
+		return imageView;
+	}
+
 	void createImageViews(void)
 	{
 		swapChainImageViews.resize(swapChainImages.size());
 
 		for (int i = 0; i < (int)swapChainImages.size(); i++) {
-			VkImageViewCreateInfo createInfo = {
-				.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-				.pNext = nullptr,
-				.flags = 0,
-				.image = swapChainImages.at(i),
-				.viewType = VK_IMAGE_VIEW_TYPE_2D,
-				.format = swapChainImageFormat,
-				.components = {
-					.r = VK_COMPONENT_SWIZZLE_IDENTITY,
-					.g = VK_COMPONENT_SWIZZLE_IDENTITY,
-					.b = VK_COMPONENT_SWIZZLE_IDENTITY,
-					.a = VK_COMPONENT_SWIZZLE_IDENTITY,
-				},
-				.subresourceRange = {
-					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-					.baseMipLevel = 0,
-					.levelCount = 1,
-					.baseArrayLayer = 0,
-					.layerCount = 1,
-				},
-			};
-
-			CALL_VK(vkCreateImageView(device, &createInfo, nullptr, &swapChainImageViews.at(i)),
-				"failed to create image view");
+			swapChainImageViews[i] = createImageView(swapChainImages[i], swapChainImageFormat);
 		}
+	}
+
+	void createTextureImageView(void)
+	{
+		textureImageView = createImageView(textureImage, VK_FORMAT_R8G8B8_SRGB);
+	}
+
+	void createTextureSampler(void)
+	{
+		VkPhysicalDeviceProperties properties;
+
+		vkGetPhysicalDeviceProperties(physicalDevice, &properties);
+
+		VkSamplerCreateInfo samplerCreateInfo = {
+			.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+			.pNext = nullptr,
+			.flags = 0,
+			.magFilter = VK_FILTER_LINEAR,
+			.minFilter = VK_FILTER_LINEAR,
+			.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+			.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+			.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+			.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+			.mipLodBias = 0,
+			.anisotropyEnable = VK_TRUE,
+			.maxAnisotropy = properties.limits.maxSamplerAnisotropy,
+			.compareEnable = VK_FALSE,
+			.compareOp = VK_COMPARE_OP_ALWAYS,
+			.minLod = 0,
+			.maxLod = 0,
+			.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
+			.unnormalizedCoordinates = VK_FALSE,
+		};
+
+		CALL_VK(vkCreateSampler(device, &samplerCreateInfo, nullptr, &textureSampler),
+			"failed to create texture smapler");
 	}
 
 	void createRenderPass(void)
@@ -1034,9 +1084,6 @@ private:
 		VkBuffer stagingBuffer;
 		VkDeviceMemory stagingBufferMemory;
 		void *gpuMemory;
-
-		VkImage textureImage;
-		VkDeviceMemory textureImageMemory;
 
 		pixels = stbi_load("textures/texture.png",&texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
 		imageSize = texWidth * texHeight * 4;
@@ -1823,6 +1870,9 @@ private:
 
 		vkDestroyCommandPool(device, commandPool, nullptr);
 		cleanupSwapChain();
+
+		vkDestroySampler(device, textureSampler, nullptr);
+		vkDestroyImageView(device, textureImageView, nullptr);
 
 		vkDestroyImage(device, textureImage, nullptr);
 		vkFreeMemory(device, textureImageMemory, nullptr);
