@@ -107,9 +107,10 @@ static std::vector<unsigned char> readFile(const std::string &fileName)
 struct Vertex {
 	alignas(16) glm::vec2 pos;
 	alignas(16) glm::vec3 color;
+	alignas(16) glm::vec2 texCoord;
 
-	Vertex(glm::vec2 pos, glm::vec3 color)
-		: pos(pos), color(color)
+	Vertex(glm::vec2 pos, glm::vec3 color, glm::vec2 texCoord)
+		: pos(pos), color(color), texCoord(texCoord)
 	{}
 
 	static VkVertexInputBindingDescription getBindingDescription(void)
@@ -123,21 +124,33 @@ struct Vertex {
 		return bindingDescription;
 	}
 
-	static std::array<VkVertexInputAttributeDescription, 2> getAttributeDescriptions(void)
+	static std::array<VkVertexInputAttributeDescription, 3> getAttributeDescriptions(void)
 	{
-		std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions;
-
-		attributeDescriptions[0] = {
+		VkVertexInputAttributeDescription posDescription = {
 			.location = 0,
 			.binding = 0,
 			.format = VK_FORMAT_R32G32_SFLOAT,
 			.offset = offsetof(Vertex, pos),
 		};
-		attributeDescriptions[1] = {
+
+		VkVertexInputAttributeDescription colorDescription = {
 			.location = 1,
 			.binding = 0,
 			.format = VK_FORMAT_R32G32B32_SFLOAT,
 			.offset = offsetof(Vertex, color),
+		};
+
+		VkVertexInputAttributeDescription texCoordDescription = {
+			.location = 2,
+			.binding = 0,
+			.format = VK_FORMAT_R32G32_SFLOAT,
+			.offset = offsetof(Vertex, texCoord),
+		};
+
+		std::array<VkVertexInputAttributeDescription, 3> attributeDescriptions = {
+			posDescription,
+			colorDescription,
+			texCoordDescription,
 		};
 
 		return attributeDescriptions;
@@ -151,10 +164,10 @@ struct UniformBufferObject {
 };
 
 const std::vector<Vertex> vertices = {
-	Vertex(glm::vec2(-0.5f, -0.5f), glm::vec3(1, 0, 0)),
-	Vertex(glm::vec2( 0.5f, -0.5f), glm::vec3(0, 1, 0)),
-	Vertex(glm::vec2( 0.5f,  0.5f), glm::vec3(1, 1, 1)),
-	Vertex(glm::vec2(-0.5f,  0.5f), glm::vec3(0, 0, 1)),
+	Vertex(glm::vec2(-0.5f, -0.5f), glm::vec3(1, 0, 0), glm::vec2(1, 0)),
+	Vertex(glm::vec2( 0.5f, -0.5f), glm::vec3(0, 1, 0), glm::vec2(0, 0)),
+	Vertex(glm::vec2( 0.5f,  0.5f), glm::vec3(1, 1, 1), glm::vec2(0, 1)),
+	Vertex(glm::vec2(-0.5f,  0.5f), glm::vec3(0, 0, 1), glm::vec2(1, 1)),
 };
 
 const std::vector<uint16_t> indices = {
@@ -862,12 +875,25 @@ private:
 			.pImmutableSamplers = nullptr,
 		};
 
+		VkDescriptorSetLayoutBinding samplerLayoutBinding = {
+			.binding = 1,
+			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			.descriptorCount = 1,
+			.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+			.pImmutableSamplers = nullptr,
+		};
+
+		std::array<VkDescriptorSetLayoutBinding, 2> bindings = {
+			uboLayoutBinding,
+			samplerLayoutBinding,
+		};
+
 		VkDescriptorSetLayoutCreateInfo layoutCreateInfo = {
 			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
 			.pNext = nullptr,
 			.flags = 0,
-			.bindingCount = 1,
-			.pBindings = &uboLayoutBinding,
+			.bindingCount = bindings.size(),
+			.pBindings = bindings.data(),
 		};
 
 		CALL_VK(vkCreateDescriptorSetLayout(device, &layoutCreateInfo, nullptr, &descriptorSetLayout),
@@ -1105,14 +1131,14 @@ private:
 
 		stbi_image_free(pixels);
 
-		createImage(texWidth, texHeight, VK_FORMAT_R8G8B8_SRGB, VK_IMAGE_TILING_OPTIMAL,
+		createImage(texWidth, texHeight, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL,
 			    VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
 			    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &textureImage, &textureImageMemory,
 			    "texture image");
-		transitionImageLayout(textureImage, VK_FORMAT_R8G8B8_SRGB,
+		transitionImageLayout(textureImage, VK_FORMAT_R8G8B8A8_SRGB,
 				      VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 		copyBufferToImage(stagingBuffer, textureImage, texWidth, texHeight);
-		transitionImageLayout(textureImage, VK_FORMAT_R8G8B8_SRGB,
+		transitionImageLayout(textureImage, VK_FORMAT_R8G8B8A8_SRGB,
 				      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
 		vkDestroyBuffer(device, stagingBuffer, nullptr);
@@ -1533,9 +1559,19 @@ private:
 
 	void createDescriptorPool(void)
 	{
-		VkDescriptorPoolSize poolSize = {
+		VkDescriptorPoolSize uboPoolSize = {
 			.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
 			.descriptorCount = MAX_FRAMES_IN_FLIGHT,
+		};
+
+		VkDescriptorPoolSize samplerPoolSize = {
+			.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			.descriptorCount = MAX_FRAMES_IN_FLIGHT,
+		};
+
+		std::array<VkDescriptorPoolSize, 2> poolSizes = {
+			uboPoolSize,
+			samplerPoolSize,
 		};
 
 		VkDescriptorPoolCreateInfo poolInfo = {
@@ -1543,8 +1579,8 @@ private:
 			.pNext = nullptr,
 			.flags = 0,
 			.maxSets = MAX_FRAMES_IN_FLIGHT,
-			.poolSizeCount = 1,
-			.pPoolSizes = &poolSize,
+			.poolSizeCount = poolSizes.size(),
+			.pPoolSizes = poolSizes.data(),
 		};
 
 		CALL_VK(vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool),
@@ -1573,7 +1609,13 @@ private:
 				.range = sizeof(UniformBufferObject),
 			};
 
-			VkWriteDescriptorSet descriptorWrite = {
+			VkDescriptorImageInfo imageInfo = {
+				.sampler = textureSampler,
+				.imageView = textureImageView,
+				.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+			};
+
+			VkWriteDescriptorSet uboDescriptorWrite = {
 				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 				.pNext = nullptr,
 				.dstSet = descriptorSets[i],
@@ -1586,7 +1628,25 @@ private:
 				.pTexelBufferView = nullptr,
 			};
 
-			vkUpdateDescriptorSets(device, 1, &descriptorWrite, 0, nullptr);
+			VkWriteDescriptorSet samplerDescriptorWrite = {
+				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+				.pNext = nullptr,
+				.dstSet = descriptorSets[i],
+				.dstBinding = 1,
+				.dstArrayElement = 0,
+				.descriptorCount = 1,
+				.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+				.pImageInfo = &imageInfo,
+				.pBufferInfo = nullptr,
+				.pTexelBufferView = nullptr,
+			};
+
+			std::array<VkWriteDescriptorSet, 2> descriptorWrites = {
+				uboDescriptorWrite,
+				samplerDescriptorWrite,
+			};
+
+			vkUpdateDescriptorSets(device, descriptorWrites.size(), descriptorWrites.data(), 0, nullptr);
 		}
 	}
 
