@@ -186,19 +186,56 @@ struct UniformBufferObject {
 
 const std::vector<Vertex> vertices = {
 	Vertex(glm::vec3(-0.5f, -0.5f, 0), glm::vec3(1, 0, 0), glm::vec2(1, 0)),
-	Vertex(glm::vec3( 0.5f, -0.5f, 0), glm::vec3(0, 1, 0), glm::vec2(0, 0)),
-	Vertex(glm::vec3( 0.5f,  0.5f, 0), glm::vec3(1, 1, 1), glm::vec2(0, 1)),
+	Vertex(glm::vec3( 0.5f, -0.5f, 0), glm::vec3(0, 1, 0), glm::vec2(0.5, 0)),
+	Vertex(glm::vec3( 0.5f,  0.5f, 0), glm::vec3(1, 1, 1), glm::vec2(0.5, 1)),
 	Vertex(glm::vec3(-0.5f,  0.5f, 0), glm::vec3(0, 0, 1), glm::vec2(1, 1)),
 
-	Vertex(glm::vec3(-0.5f, -0.5f, -0.5f), glm::vec3(1, 0, 0), glm::vec2(1, 0)),
-	Vertex(glm::vec3( 0.5f, -0.5f, -0.5f), glm::vec3(0, 1, 0), glm::vec2(0, 0)),
-	Vertex(glm::vec3( 0.5f,  0.5f, -0.5f), glm::vec3(1, 1, 1), glm::vec2(0, 1)),
-	Vertex(glm::vec3(-0.5f,  0.5f, -0.5f), glm::vec3(0, 0, 1), glm::vec2(1, 1)),
+	Vertex(glm::vec3(-0.5f, -0.5f, 0), glm::vec3(1, 0, 0), glm::vec2(0, 0)),
+	Vertex(glm::vec3( 0.5f, -0.5f, 0), glm::vec3(0, 1, 0), glm::vec2(0.5, 0)),
+	Vertex(glm::vec3( 0.5f, -0.5f, -1), glm::vec3(0, 1, 0), glm::vec2(0.5, 1)),
+	Vertex(glm::vec3(-0.5f, -0.5f, -1), glm::vec3(1, 0, 0), glm::vec2(0, 1)),
+
+	Vertex(glm::vec3(0.5f, -0.5f, 0), glm::vec3(1, 0, 0), glm::vec2(0, 0)),
+	Vertex(glm::vec3(0.5f, 0.5f, 0), glm::vec3(0, 1, 0), glm::vec2(0.5, 0)),
+	Vertex(glm::vec3(0.5f, 0.5f, -1), glm::vec3(0, 1, 0), glm::vec2(0.5, 1)),
+	Vertex(glm::vec3(0.5f, -0.5f, -1), glm::vec3(1, 0, 0), glm::vec2(0, 1)),
+
+	Vertex(glm::vec3(-0.5f, 0.5f, 0), glm::vec3(1, 0, 0), glm::vec2(0, 0)),
+	Vertex(glm::vec3( 0.5f, 0.5f, 0), glm::vec3(0, 1, 0), glm::vec2(0.5, 0)),
+	Vertex(glm::vec3( 0.5f, 0.5f, -1), glm::vec3(0, 1, 0), glm::vec2(0.5, 1)),
+	Vertex(glm::vec3(-0.5f, 0.5f, -1), glm::vec3(1, 0, 0), glm::vec2(0, 1)),
+
+	Vertex(glm::vec3(-0.5f, -0.5f, 0), glm::vec3(1, 0, 0), glm::vec2(0, 0)),
+	Vertex(glm::vec3(-0.5f, 0.5f, 0), glm::vec3(0, 1, 0), glm::vec2(0.5, 0)),
+	Vertex(glm::vec3(-0.5f, 0.5f, -1), glm::vec3(0, 1, 0), glm::vec2(0.5, 1)),
+	Vertex(glm::vec3(-0.5f, -0.5f, -1), glm::vec3(1, 0, 0), glm::vec2(0, 1)),
+
+
+	Vertex(glm::vec3(-0.5f, -0.5f, -1), glm::vec3(1, 0, 0), glm::vec2(0, 0.5)),
+	Vertex(glm::vec3( 0.0f, -0.5f, -1), glm::vec3(0, 1, 0), glm::vec2(0, 1)),
+	Vertex(glm::vec3( 0.0f,  0.5f, -1), glm::vec3(1, 1, 1), glm::vec2(0.5, 1)),
+	Vertex(glm::vec3(-0.5f,  0.5f, -1), glm::vec3(0, 0, 1), glm::vec2(0.5, 0.5)),
+
+	Vertex(glm::vec3(0.0f, -0.5f, -1), glm::vec3(1, 0, 0), glm::vec2(0, 1)),
+	Vertex(glm::vec3(0.5f, -0.5f, -1), glm::vec3(0, 1, 0), glm::vec2(0, 0.5)),
+	Vertex(glm::vec3(0.5f,  0.5f, -1), glm::vec3(1, 1, 1), glm::vec2(0.5, 0.5)),
+	Vertex(glm::vec3(0.0f,  0.5f, -1), glm::vec3(0, 0, 1), glm::vec2(0.5, 1)),
 };
 
 const std::vector<uint16_t> indices = {
 	0, 1, 2, 2, 3, 0,
-	4, 5, 6, 6, 7, 4,
+	6, 5, 4, 4, 7, 6,
+	10, 9, 8, 8, 11, 10,
+	12, 13, 14, 14, 15, 12,
+	16, 17, 18, 18, 19, 16,
+	22, 21, 20, 20, 23, 22,
+	26, 25, 24, 24, 27, 26,
+
+
+	// 1, 5, 2, 2, 5, 6,
+	// 2, 6, 7, 3, 2, 7,
+	// 0, 7, 4, 0, 3, 7,
+	// 6, 5, 4, 6, 4, 7,
 };
 
 class HelloTriangleApplication {
@@ -1979,7 +2016,7 @@ private:
 		const float aspectRatio = (float)swapChainExtent.width / swapChainExtent.height;
 
 		ubo.model = glm::rotate(glm::mat4(1), -delta * glm::radians(90.f), glm::vec3(0, 0, 1));
-		ubo.view = glm::lookAt(glm::vec3(2, 2, 2), glm::vec3(0, 0, 0), glm::vec3(0, 0, 1));
+		ubo.view = glm::lookAt(glm::vec3(3, 3, glm::sin(delta) * 3), glm::vec3(0, 0, 0), glm::vec3(0, 0, 1));
 		ubo.proj = glm::perspective(fov, aspectRatio, 0.1f, 10.f);
 		ubo.proj[1][1] *= -1;
 
