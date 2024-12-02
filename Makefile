@@ -9,7 +9,7 @@ LDFLAGS	= -lglfw -lvulkan
 CFLAGS += -g3 -O0
 CFLAGS += -D CONFIG_VALIDATION_LAYERS=1
 
-all: stb_image extentions triangle
+all: stb_image tiny_obj_loader model extentions triangle
 
 extentions:
 	$(CC) $(CFLAGS) $(INCLUDE) extentions.cpp $(LDFLAGS) -o extentions
@@ -23,3 +23,9 @@ triangle:
 
 stb_image:
 	tar xf thirdparty/stb_image.tar --directory=thirdparty
+
+tiny_obj_loader:
+	tar xf thirdparty/tiny_obj_loader.tar --directory=thirdparty
+
+model:
+	tar xf models/viking_room.tar --directory=models
