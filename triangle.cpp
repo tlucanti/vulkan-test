@@ -12,6 +12,9 @@
 #define STBI_ONLY_PNG
 #include <stb_image.h>
 
+#define TINYOBJLOADER_IMPLEMENTATION
+#include <tiny_obj_loader.h>
+
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
@@ -26,6 +29,9 @@
 
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 600
+
+#define MODEL_PATH "models/viking_room.obj"
+#define TEXTURE_PATH "textures/viking_room.png"
 
 #ifndef CONFIG_VALIDATION_LAYERS
 # define CONFIG_VALIDATION_LAYERS true
@@ -184,59 +190,8 @@ struct UniformBufferObject {
 	glm::mat4 proj;
 };
 
-const std::vector<Vertex> vertices = {
-	Vertex(glm::vec3(-0.5f, -0.5f, 0), glm::vec3(1, 0, 0), glm::vec2(1, 0)),
-	Vertex(glm::vec3( 0.5f, -0.5f, 0), glm::vec3(0, 1, 0), glm::vec2(0.5, 0)),
-	Vertex(glm::vec3( 0.5f,  0.5f, 0), glm::vec3(1, 1, 1), glm::vec2(0.5, 1)),
-	Vertex(glm::vec3(-0.5f,  0.5f, 0), glm::vec3(0, 0, 1), glm::vec2(1, 1)),
-
-	Vertex(glm::vec3(-0.5f, -0.5f, 0), glm::vec3(1, 0, 0), glm::vec2(0, 0)),
-	Vertex(glm::vec3( 0.5f, -0.5f, 0), glm::vec3(0, 1, 0), glm::vec2(0.5, 0)),
-	Vertex(glm::vec3( 0.5f, -0.5f, -1), glm::vec3(0, 1, 0), glm::vec2(0.5, 1)),
-	Vertex(glm::vec3(-0.5f, -0.5f, -1), glm::vec3(1, 0, 0), glm::vec2(0, 1)),
-
-	Vertex(glm::vec3(0.5f, -0.5f, 0), glm::vec3(1, 0, 0), glm::vec2(0, 0)),
-	Vertex(glm::vec3(0.5f, 0.5f, 0), glm::vec3(0, 1, 0), glm::vec2(0.5, 0)),
-	Vertex(glm::vec3(0.5f, 0.5f, -1), glm::vec3(0, 1, 0), glm::vec2(0.5, 1)),
-	Vertex(glm::vec3(0.5f, -0.5f, -1), glm::vec3(1, 0, 0), glm::vec2(0, 1)),
-
-	Vertex(glm::vec3(-0.5f, 0.5f, 0), glm::vec3(1, 0, 0), glm::vec2(0, 0)),
-	Vertex(glm::vec3( 0.5f, 0.5f, 0), glm::vec3(0, 1, 0), glm::vec2(0.5, 0)),
-	Vertex(glm::vec3( 0.5f, 0.5f, -1), glm::vec3(0, 1, 0), glm::vec2(0.5, 1)),
-	Vertex(glm::vec3(-0.5f, 0.5f, -1), glm::vec3(1, 0, 0), glm::vec2(0, 1)),
-
-	Vertex(glm::vec3(-0.5f, -0.5f, 0), glm::vec3(1, 0, 0), glm::vec2(0, 0)),
-	Vertex(glm::vec3(-0.5f, 0.5f, 0), glm::vec3(0, 1, 0), glm::vec2(0.5, 0)),
-	Vertex(glm::vec3(-0.5f, 0.5f, -1), glm::vec3(0, 1, 0), glm::vec2(0.5, 1)),
-	Vertex(glm::vec3(-0.5f, -0.5f, -1), glm::vec3(1, 0, 0), glm::vec2(0, 1)),
-
-
-	Vertex(glm::vec3(-0.5f, -0.5f, -1), glm::vec3(1, 0, 0), glm::vec2(0, 0.5)),
-	Vertex(glm::vec3( 0.0f, -0.5f, -1), glm::vec3(0, 1, 0), glm::vec2(0, 1)),
-	Vertex(glm::vec3( 0.0f,  0.5f, -1), glm::vec3(1, 1, 1), glm::vec2(0.5, 1)),
-	Vertex(glm::vec3(-0.5f,  0.5f, -1), glm::vec3(0, 0, 1), glm::vec2(0.5, 0.5)),
-
-	Vertex(glm::vec3(0.0f, -0.5f, -1), glm::vec3(1, 0, 0), glm::vec2(0, 1)),
-	Vertex(glm::vec3(0.5f, -0.5f, -1), glm::vec3(0, 1, 0), glm::vec2(0, 0.5)),
-	Vertex(glm::vec3(0.5f,  0.5f, -1), glm::vec3(1, 1, 1), glm::vec2(0.5, 0.5)),
-	Vertex(glm::vec3(0.0f,  0.5f, -1), glm::vec3(0, 0, 1), glm::vec2(0.5, 1)),
-};
-
-const std::vector<uint16_t> indices = {
-	0, 1, 2, 2, 3, 0,
-	6, 5, 4, 4, 7, 6,
-	10, 9, 8, 8, 11, 10,
-	12, 13, 14, 14, 15, 12,
-	16, 17, 18, 18, 19, 16,
-	22, 21, 20, 20, 23, 22,
-	26, 25, 24, 24, 27, 26,
-
-
-	// 1, 5, 2, 2, 5, 6,
-	// 2, 6, 7, 3, 2, 7,
-	// 0, 7, 4, 0, 3, 7,
-	// 6, 5, 4, 6, 4, 7,
-};
+std::vector<Vertex> vertices;
+std::vector<uint32_t> indices;
 
 class HelloTriangleApplication {
 public:
@@ -349,6 +304,7 @@ private:
 		createTextureImageView();
 		createTextureSampler();
 		printMemoryTypes();
+		loadModel();
 		createVertexBuffer();
 		createIndexBuffer();
 		createUniformBuffers();
@@ -1229,7 +1185,7 @@ private:
 		VkDeviceMemory stagingBufferMemory;
 		void *gpuMemory;
 
-		pixels = stbi_load("textures/texture.png",&texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+		pixels = stbi_load(TEXTURE_PATH, &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
 		imageSize = texWidth * texHeight * 4;
 
 		if (pixels == nullptr) {
@@ -1379,7 +1335,7 @@ private:
 		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
 
 		vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-		vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT16);
+		vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
 		vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
 		vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
@@ -1508,6 +1464,40 @@ private:
 
 		CALL_VK(vkBindImageMemory(device, *pImage, *pImageMemory, 0),
 			std::string("failed to bind ") + name + " memory");
+	}
+
+	void loadModel(void)
+	{
+		tinyobj::attrib_t attrib;
+		std::vector<tinyobj::shape_t> shapes;
+		std::vector<tinyobj::material_t> materials;
+		std::string warn, err;
+
+		if (tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, MODEL_PATH) == false) {
+			PANIC_VK(warn + err);
+		}
+
+		for (tinyobj::shape_t &shape : shapes) {
+			for (tinyobj::index_t &index : shape.mesh.indices) {
+				glm::vec3 pos = {
+					attrib.vertices[3 * index.vertex_index + 0],
+					attrib.vertices[3 * index.vertex_index + 1],
+					attrib.vertices[3 * index.vertex_index + 2],
+				};
+
+				glm::vec2 texCoord = {
+					attrib.texcoords[2 * index.texcoord_index + 0],
+					1.f - attrib.texcoords[2 * index.texcoord_index + 1],
+				};
+
+				glm::vec3 color = { 1, 1, 1 };
+
+				Vertex vertex(pos, color, texCoord);
+
+				vertices.push_back(vertex);
+				indices.push_back(indices.size());
+			}
+		}
 	}
 
 	void createVertexBuffer(void)
@@ -2015,8 +2005,8 @@ private:
 		const float fov = glm::radians(45.f);
 		const float aspectRatio = (float)swapChainExtent.width / swapChainExtent.height;
 
-		ubo.model = glm::rotate(glm::mat4(1), -delta * glm::radians(90.f), glm::vec3(0, 0, 1));
-		ubo.view = glm::lookAt(glm::vec3(3, 3, glm::sin(delta) * 3), glm::vec3(0, 0, 0), glm::vec3(0, 0, 1));
+		ubo.model = glm::rotate(glm::mat4(1), glm::sin(delta) / 2 * glm::radians(90.f), glm::vec3(0, 0, 1));
+		ubo.view = glm::lookAt(glm::vec3(1.5, 1.5, glm::sin(delta) + 2), glm::vec3(0, 0, 0), glm::vec3(0, 0, 1));
 		ubo.proj = glm::perspective(fov, aspectRatio, 0.1f, 10.f);
 		ubo.proj[1][1] *= -1;
 
