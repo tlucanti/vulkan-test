@@ -3,7 +3,7 @@ CC = clang++
 GLSLC = glslc
 
 CFLAGS	= -Wall -Wextra -Werror -std=c++17 -fdiagnostics-color=always
-INCLUDE = -I thirdparty
+INCLUDE = -I ../thirdparty
 LDFLAGS	= -lglfw -lvulkan
 
 CFLAGS += -g3 -O0
@@ -22,10 +22,10 @@ triangle:
 .PHONY: triangle
 
 stb_image:
-	tar xf thirdparty/stb_image.tar --directory=thirdparty
+	tar xf ../thirdparty/stb_image.tar --directory=../thirdparty
 
 tiny_obj_loader:
-	tar xf thirdparty/tiny_obj_loader.tar --directory=thirdparty
+	tar xf ../thirdparty/tiny_obj_loader.tar --directory=../thirdparty
 
 model:
 	tar xf models/viking_room.tar --directory=models

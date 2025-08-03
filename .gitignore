@@ -1,7 +1,2 @@
 
-/.cache
-/extentions
-/triangle
-*.spv
 compile_commands.json
-
