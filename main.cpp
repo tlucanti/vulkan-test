@@ -1,6 +1,7 @@
 
-#define GLFW_INCLUDE_VULKAN
-#include <GLFW/glfw3.h>
+#include <vulkan/vulkan.h>
+
+#include "kwindow.hpp"
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
@@ -197,15 +198,14 @@ class HelloTriangleApplication {
 public:
 	void run()
 	{
-		initGLFW();
 		initVulkan();
 		mainLoop();
 		cleanup();
 	}
 
 private:
+	struct kwindow kwindow;
 
-	GLFWwindow *window;
 	VkInstance instance;
 	VkDebugUtilsMessengerEXT debugMessenger;
 	VkPhysicalDevice physicalDevice;
@@ -258,18 +258,14 @@ private:
 		std::vector<VkPresentModeKHR> presentModes;
 	};
 
-	void initGLFW(void)
+	void create_window(void)
 	{
-		glfwInit();
+		kwindow_info info;
 
-		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-		glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
-
-		window = glfwCreateWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "vulkan", nullptr, nullptr);
-		glfwSetWindowUserPointer(window, this);
-		glfwSetFramebufferSizeCallback(window, framebufferResizeCallback);
+		kwindow.create(&info);
 	}
 
+	/*
 	static void framebufferResizeCallback(GLFWwindow *window, int width, int height)
 	{
 		(void)width;
@@ -277,6 +273,7 @@ private:
 		auto app = reinterpret_cast<HelloTriangleApplication *>(glfwGetWindowUserPointer(window));
 		app->frameBufferResized = true;
 	}
+	*/
 
 	void initVulkan(void)
 	{
@@ -284,6 +281,8 @@ private:
 			PANIC_VK("validation layers requested, but not available!");
 		}
 		frameBufferResized = false;
+
+		create_window();
 
 		printExtentions();
 		createInstance();
@@ -598,7 +597,7 @@ private:
 
 	void createSurface(void)
 	{
-		CALL_VK(glfwCreateWindowSurface(instance, window, nullptr, &surface),
+		CALL_VK(glfwCreateWindowSurface(instance, kwindow.__get_window(), nullptr, &surface),
 			"failed to create window surface");
 	}
 
@@ -633,7 +632,7 @@ private:
 		uint32_t width, height;
 		VkExtent2D extent;
 
-		glfwGetFramebufferSize(window, (int *)&width, (int *)&height);
+		std::tie(width, height) = kwindow.get_framebuffer_size();
 
 		width = std::max(width, capabilities.minImageExtent.width);
 		width = std::min(width, capabilities.maxImageExtent.width);
@@ -722,13 +721,13 @@ private:
 
 	void recreateSwapChain(void)
 	{
-		int width, height;
+		uint32_t width, height;
 
-		glfwGetFramebufferSize(window, &width, &height);
+		std::tie(width, height) = kwindow.get_framebuffer_size();
 		while (width == 0 || height == 0) {
 			std::cout << "sleeping\n";
-			glfwWaitEvents();
-			glfwGetFramebufferSize(window, &width, &height);
+			kwindow.wait_events();
+			std::tie(width, height) = kwindow.get_framebuffer_size();
 		}
 
 		vkDeviceWaitIdle(device);
@@ -2088,8 +2087,8 @@ private:
 	{
 		currentFrame = 0;
 
-		while (!glfwWindowShouldClose(this->window)) {
-			glfwPollEvents();
+		while (!kwindow.should_close()) {
+			kwindow.poll_events();
 			drawFrame();
 		}
 
@@ -2138,8 +2137,7 @@ private:
 		vkDestroySurfaceKHR(instance, surface, nullptr);
 		vkDestroyInstance(instance, nullptr);
 
-		glfwDestroyWindow(this->window);
-		glfwTerminate();
+		kwindow.destroy();
 	}
 };
 
