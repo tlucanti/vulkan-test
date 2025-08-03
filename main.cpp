@@ -30,8 +30,8 @@
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 600
 
-#define MODEL_PATH "models/viking_room.obj"
-#define TEXTURE_PATH "textures/viking_room.png"
+#define MODEL_PATH "test-triangle/models/viking_room.obj"
+#define TEXTURE_PATH "test-triangle/textures/viking_room.png"
 
 #ifndef CONFIG_VALIDATION_LAYERS
 # define CONFIG_VALIDATION_LAYERS true
