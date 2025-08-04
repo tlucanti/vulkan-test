@@ -1,6 +1,9 @@
 
 #include <vulkan/vulkan.h>
 
+#include "vkcommon.hpp"
+#include "vkinstance.hpp"
+
 #include "kwindow.hpp"
 
 #define GLM_FORCE_RADIANS
@@ -19,7 +22,6 @@
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
-#include <stdexcept>
 
 #include <array>
 #include <chrono>
@@ -28,94 +30,14 @@
 #include <string>
 #include <vector>
 
-#define WINDOW_WIDTH 800
-#define WINDOW_HEIGHT 600
-
 #define MODEL_PATH "test-triangle/models/viking_room.obj"
 #define TEXTURE_PATH "test-triangle/textures/viking_room.png"
 
-#ifndef CONFIG_VALIDATION_LAYERS
-# define CONFIG_VALIDATION_LAYERS true
-#endif
-
 #define MAX_FRAMES_IN_FLIGHT 2
-
-#if CONFIG_VALIDATION_LAYERS
-const std::vector<const char *> validationLayers = {
-	"VK_LAYER_KHRONOS_validation",
-};
-#else
-const std::vector<const char *> validationLayers;
-#endif
 
 const std::vector<const char *> deviceExtensions = {
 	VK_KHR_SWAPCHAIN_EXTENSION_NAME,
 };
-
-__attribute__((__noreturn__))
-static inline void PANIC_VK(const std::string &message)
-{
-	throw std::runtime_error(message);
-}
-
-static inline void CALL_VK(VkResult result, std::string message)
-{
-	if (result != VK_SUCCESS) {
-		message += " (errorcode: " + std::to_string(result) + ")";
-		PANIC_VK(message);
-	}
-}
-
-namespace Color {
-	struct ColorImpl {
-		const char *color;
-	};
-
-	ColorImpl blue = { "" };
-	ColorImpl yellow = { "" };
-	ColorImpl red = { "" };
-	ColorImpl reset = { "" };
-
-	#define istty(x) false
-	std::ostream &operator <<(std::ostream &out, const ColorImpl &c)
-	{
-		if (istty(out)) {
-			out << c.color;
-		}
-		return out;
-	}
-};
-
-static VkResult CreateDebugUtilsMessengerEXT(
-	VkInstance instance,
-	const VkDebugUtilsMessengerCreateInfoEXT *pCreateInfo,
-	const VkAllocationCallbacks *pAllocator,
-	VkDebugUtilsMessengerEXT *pDebugMessenger)
-{
-	auto func = (PFN_vkCreateDebugUtilsMessengerEXT)
-		vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
-
-	if (func != nullptr) {
-		return func(instance, pCreateInfo, pAllocator, pDebugMessenger);
-	} else {
-		return VK_ERROR_EXTENSION_NOT_PRESENT;
-	}
-}
-
-static void
-DestroyDebugUtilsMessengerEXT(VkInstance instance,
-			      VkDebugUtilsMessengerEXT debugMessenger,
-			      const VkAllocationCallbacks *pAllocator)
-{
-	auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)
-		vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
-
-	if (func != nullptr) {
-		func(instance, debugMessenger, pAllocator);
-	} else {
-		PANIC_VK("vkDestroyDebugUtilsMessengerEXT function is not present");
-	}
-}
 
 static std::vector<unsigned char> readFile(const std::string &fileName)
 {
@@ -204,10 +126,9 @@ public:
 	}
 
 private:
-	struct kwindow kwindow;
+	kwindow kwindow;
+	vkinstance vkinstance;
 
-	VkInstance instance;
-	VkDebugUtilsMessengerEXT debugMessenger;
 	VkPhysicalDevice physicalDevice;
 	VkDevice device;
 	VkQueue graphicsQueue;
@@ -283,9 +204,9 @@ private:
 		frameBufferResized = false;
 
 		create_window();
+		create_instance();
 
 		printExtentions();
-		createInstance();
 		setupDebugMessenger();
 		createSurface();
 		printPhysicalDevices();
@@ -313,96 +234,15 @@ private:
 		createSyncObjects();
 	}
 
-	std::vector<const char *> getRequieredExtensions()
+	void create_instance()
 	{
-		uint32_t glfwExtensionCount;
-		const char **glfwExtentions;
+		vkinstance_info info;
 
-		glfwExtentions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
-		std::vector<const char *> extensions(glfwExtentions, glfwExtentions + glfwExtensionCount);
-
-		std::cout << "requiered glfw extensions:\n";
-		for (const char *extension : extensions) {
-			std::cout << '\t' << extension << '\n';
-		}
-		std::cout << '\n';
-
-		if (CONFIG_VALIDATION_LAYERS) {
-			extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-		}
-
-		return extensions;
+		vkinstance.create(&info);
 	}
-
-	void createInstance(void)
-	{
-		VkApplicationInfo appInfo = {
-			.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
-			.pNext = nullptr,
-			.pApplicationName = "triangle test",
-			.applicationVersion = VK_MAKE_VERSION(1, 0, 0),
-			.pEngineName = "no engine",
-			.engineVersion = VK_MAKE_VERSION(1, 0, 0),
-			.apiVersion = VK_API_VERSION_1_0
-		};
-
-		auto requieredExtensions = getRequieredExtensions();
-		VkInstanceCreateInfo createInfo = {
-			.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
-			.pNext = nullptr,
-			.flags = 0,
-			.pApplicationInfo = &appInfo,
-			.enabledLayerCount = 0,
-			.ppEnabledLayerNames = nullptr,
-			.enabledExtensionCount = (uint32_t)requieredExtensions.size(),
-			.ppEnabledExtensionNames = requieredExtensions.data(),
-		};
-
-		VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo;
-		if (CONFIG_VALIDATION_LAYERS) {
-
-			populateDebugMessengerCreateInfo(&debugCreateInfo);
-
-			createInfo.enabledLayerCount = (uint32_t)validationLayers.size();
-			createInfo.ppEnabledLayerNames = validationLayers.data();
-			createInfo.pNext = &debugCreateInfo;
-		}
-
-
-		CALL_VK(vkCreateInstance(&createInfo, nullptr, &instance),
-			"failed to create instance");
-	}
-
-	void populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT *createInfo)
-	{
-		uint32_t severity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
-				    VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
-				    VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-		uint32_t type = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
-				VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
-				VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-
-		createInfo->sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-		createInfo->pNext = nullptr;
-		createInfo->flags = 0;
-		createInfo->messageSeverity = severity;
-		createInfo->messageType = type;
-		createInfo->pfnUserCallback = debugCallback;
-		createInfo->pUserData = nullptr;
-	}
-
 
 	void setupDebugMessenger(void)
 	{
-		VkDebugUtilsMessengerCreateInfoEXT createInfo;
-
-		if (not CONFIG_VALIDATION_LAYERS) {
-			return;
-		}
-
-		populateDebugMessengerCreateInfo(&createInfo);
-		CALL_VK(CreateDebugUtilsMessengerEXT(instance, &createInfo, nullptr, &debugMessenger),
-			"failed to set up debug messenger!");
 	}
 
 	QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device)
@@ -520,7 +360,7 @@ private:
 		uint32_t deviceCount;
 		std::vector<VkPhysicalDevice> devices;
 
-		CALL_VK(vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr),
+		CALL_VK(vkEnumeratePhysicalDevices(vkinstance.__get_instance(), &deviceCount, nullptr),
 			"failed to get physical devices count");
 
 		if (deviceCount == 0) {
@@ -528,7 +368,7 @@ private:
 		}
 
 		devices.resize(deviceCount);
-		CALL_VK(vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data()),
+		CALL_VK(vkEnumeratePhysicalDevices(vkinstance.__get_instance(), &deviceCount, devices.data()),
 			"failed to get physical devices list");
 
 		for (const auto &device : devices) {
@@ -597,7 +437,7 @@ private:
 
 	void createSurface(void)
 	{
-		CALL_VK(glfwCreateWindowSurface(instance, kwindow.__get_window(), nullptr, &surface),
+		CALL_VK(glfwCreateWindowSurface(vkinstance.__get_instance(), kwindow.__get_window(), nullptr, &surface),
 			"failed to create window surface");
 	}
 
@@ -1907,7 +1747,7 @@ private:
 		uint32_t deviceCount;
 		std::vector<VkPhysicalDevice> devices;
 
-		CALL_VK(vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr),
+		CALL_VK(vkEnumeratePhysicalDevices(vkinstance.__get_instance(), &deviceCount, nullptr),
 			"failed to get physical device count");
 
 		std::cout << "avaliable physical devices:\n";
@@ -1917,7 +1757,7 @@ private:
 		}
 
 		devices.resize(deviceCount);
-		CALL_VK(vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data()),
+		CALL_VK(vkEnumeratePhysicalDevices(vkinstance.__get_instance(), &deviceCount, devices.data()),
 			"failed to get physical devices list");
 
 		for (const auto &device : devices) {
@@ -1931,38 +1771,6 @@ private:
 			std::cout << '\n';
 		}
 		std::cout << '\n';
-	}
-
-	static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
-		VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
-		VkDebugUtilsMessageTypeFlagsEXT messageType,
-		const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
-		void* pUserData)
-	{
-		(void)messageSeverity;
-		(void)messageType;
-		(void)pUserData;
-
-		switch (messageSeverity) {
-			case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
-				// std::cerr << "validation layer: ";
-				// break;
-				return VK_FALSE;
-			case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
-				std::cerr << Color::blue << "[VALIDATION INFO]: " << Color::reset;
-				break;
-			case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
-				std::cerr << Color::yellow << "[VALIDATION WARNING]: " << Color::reset;
-				break;
-			case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
-				std::cerr << Color::red << "[VALIDATION ERROR]: " << Color::reset;
-				break;
-			default:
-				PANIC_VK("unknown message severity");
-		}
-		std::cerr << pCallbackData->pMessage << '\n';
-
-		return VK_FALSE;
 	}
 
 	bool checkValidationLayerSupport(void)
@@ -2130,13 +1938,9 @@ private:
 
 		vkDestroyDevice(device, nullptr);
 
-		if (CONFIG_VALIDATION_LAYERS) {
-			DestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
-		}
+		vkDestroySurfaceKHR(vkinstance.__get_instance(), surface, nullptr);
 
-		vkDestroySurfaceKHR(instance, surface, nullptr);
-		vkDestroyInstance(instance, nullptr);
-
+		vkinstance.destroy();
 		kwindow.destroy();
 	}
 };
