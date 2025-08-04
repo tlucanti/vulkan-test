@@ -133,7 +133,6 @@ private:
 	VkDevice device;
 	VkQueue graphicsQueue;
 	VkQueue presentQueue;
-	VkSurfaceKHR surface;
 	VkSwapchainKHR swapChain;
 	std::vector<VkImage> swapChainImages;
 	VkFormat swapChainImageFormat;
@@ -205,10 +204,8 @@ private:
 
 		create_window();
 		create_instance();
+		vkinstance.create_surface(kwindow);
 
-		printExtentions();
-		setupDebugMessenger();
-		createSurface();
 		printPhysicalDevices();
 		pickPhysicalDevice();
 		createLogicalDevice();
@@ -239,10 +236,7 @@ private:
 		vkinstance_info info;
 
 		vkinstance.create(&info);
-	}
-
-	void setupDebugMessenger(void)
-	{
+		vkinstance.print_extensions();
 	}
 
 	QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device)
@@ -266,7 +260,7 @@ private:
 			}
 
 			VkBool32 surfaceSupport = false;
-			CALL_VK(vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &surfaceSupport),
+			CALL_VK(vkGetPhysicalDeviceSurfaceSupportKHR(device, i, vkinstance.__get_surface(), &surfaceSupport),
 				"failed to check device surface support");
 			if (surfaceSupport) {
 				indices.presentFamily = i;
@@ -284,19 +278,19 @@ private:
 		uint32_t formatCount;
 		uint32_t presentModeCount;
 
-		CALL_VK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &details.capabilities),
+		CALL_VK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, vkinstance.__get_surface(), &details.capabilities),
 			"failed to get surface capabilities");
 
-		CALL_VK(vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, nullptr),
+		CALL_VK(vkGetPhysicalDeviceSurfaceFormatsKHR(device, vkinstance.__get_surface(), &formatCount, nullptr),
 			"failed to get surface formats");
 		details.formats.resize(formatCount);
-		CALL_VK(vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &formatCount, details.formats.data()),
+		CALL_VK(vkGetPhysicalDeviceSurfaceFormatsKHR(device, vkinstance.__get_surface(), &formatCount, details.formats.data()),
 			"failed to get surface formats");
 
-		CALL_VK(vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, nullptr),
+		CALL_VK(vkGetPhysicalDeviceSurfacePresentModesKHR(device, vkinstance.__get_surface(), &presentModeCount, nullptr),
 			"failed to get surface present modes");
 		details.presentModes.resize(presentModeCount);
-		CALL_VK(vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &presentModeCount, details.presentModes.data()),
+		CALL_VK(vkGetPhysicalDeviceSurfacePresentModesKHR(device, vkinstance.__get_surface(), &presentModeCount, details.presentModes.data()),
 			"failed to get surface present modes");
 
 		return details;
@@ -435,12 +429,6 @@ private:
 		vkGetDeviceQueue(device, indices.presentFamily, 0, &presentQueue);
 	}
 
-	void createSurface(void)
-	{
-		CALL_VK(glfwCreateWindowSurface(vkinstance.__get_instance(), kwindow.__get_window(), nullptr, &surface),
-			"failed to create window surface");
-	}
-
 	VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR> &avaliableFormats)
 	{
 		for (const auto &format : avaliableFormats) {
@@ -504,7 +492,7 @@ private:
 			.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
 			.pNext = nullptr,
 			.flags = 0,
-			.surface = surface,
+			.surface = vkinstance.__get_surface(),
 			.minImageCount = imageCount,
 			.imageFormat = surfaceFormat.format,
 			.imageColorSpace = surfaceFormat.colorSpace,
@@ -1706,24 +1694,6 @@ private:
 		}
 	}
 
-	void printExtentions(void)
-	{
-		uint32_t extensionCount;
-		std::vector<VkExtensionProperties> extensions;
-
-		CALL_VK(vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr),
-			"failed to get vulkan extentions count");
-		extensions.resize(extensionCount);
-		CALL_VK(vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, extensions.data()),
-			"faild to get vulkan extentions list");
-
-		std::cout << "avaliable extensions:\n";
-		for (const auto &extensionProperties : extensions) {
-			std::cout << '\t' << extensionProperties.extensionName << '\n';
-		}
-		std::cout << '\n';
-	}
-
 	void printDeviceExtensinos(VkPhysicalDevice device)
 	{
 		uint32_t extensionCount;
@@ -1937,8 +1907,6 @@ private:
 		vkDestroyRenderPass(device, renderPass, nullptr);
 
 		vkDestroyDevice(device, nullptr);
-
-		vkDestroySurfaceKHR(vkinstance.__get_instance(), surface, nullptr);
 
 		vkinstance.destroy();
 		kwindow.destroy();
