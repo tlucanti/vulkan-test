@@ -2,7 +2,7 @@
 #ifndef KWINDOW_HPP
 #define KWINDOW_HPP
 
-#include <GLFW/glfw3.h>
+#include "vkcommon.hpp"
 
 #include <utility>
 
@@ -14,10 +14,7 @@ struct kwindow_info {
 };
 
 struct kwindow {
-	kwindow(void) {}
-	~kwindow(void) {}
-
-	void create(struct kwindow_info *create_info)
+	void create(kwindow_info *create_info)
 	{
 		glfwInit();
 
@@ -68,8 +65,7 @@ struct kwindow {
 	}
 
 private:
-	GLFWwindow *window;
-
+	GLFWwindow *window = nullptr;
 };
 
 #endif /* KWINDOW_HPP */
