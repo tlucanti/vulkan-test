@@ -3,6 +3,7 @@
 #define VKINSTANCE_HPP
 
 #include "vkcommon.hpp"
+#include "kwindow.hpp"
 
 #include <vector>
 #include <iostream>
@@ -85,7 +86,32 @@ struct vkinstance {
 	void destroy(void)
 	{
 		DestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr);
+		vkDestroySurfaceKHR(instance, surface, nullptr);
 		vkDestroyInstance(instance, nullptr);
+	}
+
+	void print_extensions(void)
+	{
+		uint32_t extensionCount;
+		std::vector<VkExtensionProperties> extensions;
+
+		CALL_VK(vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr),
+			"failed to get vulkan extentions count");
+		extensions.resize(extensionCount);
+		CALL_VK(vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, extensions.data()),
+			"faild to get vulkan extentions list");
+
+		std::cout << "avaliable extensions:\n";
+		for (const auto &extensionProperties : extensions) {
+			std::cout << '\t' << extensionProperties.extensionName << '\n';
+		}
+		std::cout << '\n';
+	}
+
+	void create_surface(kwindow kwindow)
+	{
+		CALL_VK(glfwCreateWindowSurface(instance, kwindow.__get_window(), nullptr, &surface),
+			"failed to create window surface");
 	}
 
 	VkInstance __get_instance(void)
@@ -93,9 +119,15 @@ struct vkinstance {
 		return instance;
 	}
 
+	VkSurfaceKHR __get_surface(void)
+	{
+		return surface;
+	}
+
 private:
 	VkInstance instance;
 	VkDebugUtilsMessengerEXT debugMessenger;
+	VkSurfaceKHR surface;
 
 	void create_instance(vkinstance_info *create_info)
 	{
