@@ -14,16 +14,16 @@ struct kwindow_info {
 };
 
 struct kwindow {
-	void create(kwindow_info *create_info)
+	void create(const kwindow_info &create_info)
 	{
 		glfwInit();
 
 		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-		glfwWindowHint(GLFW_RESIZABLE, create_info->resizable);
+		glfwWindowHint(GLFW_RESIZABLE, create_info.resizable);
 
-		this->window = glfwCreateWindow(create_info->width,
-						create_info->height,
-						create_info->title,
+		this->window = glfwCreateWindow(create_info.width,
+						create_info.height,
+						create_info.title,
 						nullptr, nullptr);
 
 		// glfwSetWindowUserPointer(window, this);

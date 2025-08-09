@@ -7,6 +7,7 @@
 
 #include <vector>
 #include <iostream>
+#include <vulkan/vulkan_core.h>
 
 struct vkinstance_info {
 	bool debug   = true;
@@ -77,7 +78,7 @@ DestroyDebugUtilsMessengerEXT(VkInstance instance,
 }
 
 struct vkinstance {
-	void create(vkinstance_info *create_info)
+	void create(const vkinstance_info &create_info)
 	{
 		create_instance(create_info);
 		create_debug_messanger(create_info);
@@ -108,7 +109,7 @@ struct vkinstance {
 		std::cout << '\n';
 	}
 
-	void create_surface(kwindow kwindow)
+	void create_surface(kwindow &kwindow)
 	{
 		CALL_VK(glfwCreateWindowSurface(instance, kwindow.__get_window(), nullptr, &surface),
 			"failed to create window surface");
@@ -125,11 +126,11 @@ struct vkinstance {
 	}
 
 private:
-	VkInstance instance;
-	VkDebugUtilsMessengerEXT debugMessenger;
-	VkSurfaceKHR surface;
+	VkInstance instance = VK_NULL_HANDLE;
+	VkDebugUtilsMessengerEXT debugMessenger = VK_NULL_HANDLE;
+	VkSurfaceKHR surface = VK_NULL_HANDLE;
 
-	void create_instance(vkinstance_info *create_info)
+	void create_instance(const vkinstance_info &create_info)
 	{
 		VkApplicationInfo appInfo = {
 			.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
@@ -142,7 +143,7 @@ private:
 		};
 
 		auto requieredExtensions = get_required_extentions(
-			create_info->debug, create_info->verbose);
+			create_info.debug, create_info.verbose);
 
 		VkInstanceCreateInfo createInfo = {
 			.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
@@ -156,7 +157,7 @@ private:
 		};
 
 		VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo;
-		if (create_info->debug) {
+		if (create_info.debug) {
 			populateDebugMessengerCreateInfo(&debugCreateInfo);
 
 			createInfo.enabledLayerCount = (uint32_t)validationLayers.size();
@@ -168,11 +169,11 @@ private:
 			"failed to create instance");
 	}
 
-	void create_debug_messanger(vkinstance_info *create_info)
+	void create_debug_messanger(const vkinstance_info &create_info)
 	{
 		VkDebugUtilsMessengerCreateInfoEXT createInfo;
 
-		if (not create_info->debug) {
+		if (not create_info.debug) {
 			return;
 		}
 
