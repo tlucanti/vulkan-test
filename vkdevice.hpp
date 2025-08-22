@@ -30,6 +30,8 @@ const std::vector<const char *> deviceExtensions = {
 struct vkdevice {
 	void create(const vkdevice_info &create_info, vkinstance &vkinstance)
 	{
+		this->vkinstance = &vkinstance;
+
 		if (create_info.verbose) {
 			printPhysicalDevices(vkinstance);
 		}
@@ -57,6 +59,14 @@ struct vkdevice {
 		return findQueueFamilies(this->physicalDevice, vkinstance);
 	}
 
+	void create_image(uint32_t width, uint32_t height, VkFormat format,
+			 VkImageTiling tiling, VkImageUsageFlags usage,
+			 VkMemoryPropertyFlags properties, VkImage *pImage,
+			 VkDeviceMemory *pImageMemory, const char *name)
+	{
+		createImage(width, height, format, tiling, usage, properties, pImage, pImageMemory, name);
+	}
+
 	VkPhysicalDevice __get_physical_device(void)
 	{
 		return this->physicalDevice;
@@ -77,7 +87,14 @@ struct vkdevice {
 		return this->presentQueue;
 	}
 
+	vkinstance &get_vkinstance(void)
+	{
+		return *vkinstance;
+	}
+
 private:
+	vkinstance *vkinstance = nullptr;
+
 	VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
 	VkDevice device = VK_NULL_HANDLE;
 	VkQueue graphicsQueue = VK_NULL_HANDLE;
@@ -319,6 +336,54 @@ private:
 			"failed to get surface present modes");
 
 		return details;
+	}
+
+	void createImage(uint32_t width, uint32_t height, VkFormat format,
+			 VkImageTiling tiling, VkImageUsageFlags usage,
+			 VkMemoryPropertyFlags properties, VkImage *pImage,
+			 VkDeviceMemory *pImageMemory, const char *name)
+	{
+		VkMemoryRequirements memRequirements;
+
+		VkImageCreateInfo imageCreateInfo = {
+			.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+			.pNext = nullptr,
+			.flags = 0,
+			.imageType = VK_IMAGE_TYPE_2D,
+			.format = format,
+			.extent = {
+				.width = width,
+				.height = height,
+				.depth = 1,
+			},
+			.mipLevels = 1,
+			.arrayLayers = 1,
+			.samples = VK_SAMPLE_COUNT_1_BIT,
+			.tiling = tiling,
+			.usage = usage,
+			.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+			.queueFamilyIndexCount = 0,
+			.pQueueFamilyIndices = 0,
+			.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+		};
+
+		CALL_VK(vkCreateImage(vkdevice.__get_device(), &imageCreateInfo, nullptr, pImage),
+			std::string("failed to create ") + name);
+
+		vkGetImageMemoryRequirements(vkdevice.__get_device(), *pImage, &memRequirements);
+
+		VkMemoryAllocateInfo memAllocInfo = {
+			.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+			.pNext = nullptr,
+			.allocationSize = memRequirements.size,
+			.memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, properties),
+		};
+
+		CALL_VK(vkAllocateMemory(vkdevice.__get_device(), &memAllocInfo, nullptr, pImageMemory),
+			std::string("failed to allocate ") + name + " memory");
+
+		CALL_VK(vkBindImageMemory(vkdevice.__get_device(), *pImage, *pImageMemory, 0),
+			std::string("failed to bind ") + name + " memory");
 	}
 
 };
