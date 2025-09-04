@@ -5,12 +5,13 @@ VK_SDK	= $(HOME)/git/vulkan-sdk/
 
 NAME	= main.elf
 
-$(NAME): vulkan.pcm
+$(NAME): vulkan.pcm main.cpp
 	$(CXX) \
 		-std=c++23 \
 		-fmodule-file=vulkan.pcm \
 		-Wno-eager-load-cxx-named-modules \
 		main.cpp \
+		-l glfw \
 		-o main.elf
 
 vulkan.pcm:
