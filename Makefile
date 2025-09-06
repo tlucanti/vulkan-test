@@ -16,6 +16,7 @@ $(NAME): vulkan.pcm main.cpp
 
 vulkan.pcm:
 	$(CXX) \
+		-D VULKAN_HPP_NO_STRUCT_CONSTRUCTORS \
 		-I $(VK_SDK)/x86_64/include/ \
 		--precompile \
 		-o vulkan.pcm \
