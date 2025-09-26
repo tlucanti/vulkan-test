@@ -42,6 +42,7 @@ private:
     GLFWwindow *window;
     vk::raii::Context  context;
     vk::raii::Instance instance = nullptr;
+    vk::raii::DebugUtilsMessengerEXT debug_messenger = nullptr;
 
     void init_window(void)
     {
@@ -56,6 +57,7 @@ private:
     void init_vulkan(void)
     {
         create_instance();
+        setup_debug_messanger();
     }
 
     std::vector<const char *> get_required_extensions()
@@ -117,6 +119,21 @@ private:
         instance = vk::raii::Instance(context, create_info);
     }
 
+    void setup_debug_messanger(void)
+    {
+        vk::DebugUtilsMessageSeverityFlagsEXT severity_flags(vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose |
+                                                             vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning |
+                                                             vk::DebugUtilsMessageSeverityFlagBitsEXT::eError);
+
+        vk::DebugUtilsMessageTypeFlagsEXT message_type_flags(vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral |
+                                                             vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance |
+                                                             vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation);
+
+        vk::DebugUtilsMessengerCreateInfoEXT create_info({}, severity_flags, message_type_flags, &debug_callback);
+
+        debug_messenger = instance.createDebugUtilsMessengerEXT(create_info);
+    }
+
     void main_loop(void)
     {
         while (not glfwWindowShouldClose(window)) {
@@ -128,6 +145,17 @@ private:
     {
         glfwDestroyWindow(window);
         glfwTerminate();
+    }
+
+    static vk::Bool32 debug_callback(
+        vk::DebugUtilsMessageSeverityFlagBitsEXT severity,
+        vk::DebugUtilsMessageTypeFlagsEXT type,
+        const vk::DebugUtilsMessengerCallbackDataEXT *callback_data, void *)
+    {
+        if (severity >= vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose) {
+            std::cerr << "validation layer" << " msg: " << callback_data->pMessage << std::endl;
+        }
+        return vk::False;
     }
 };
 
