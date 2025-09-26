@@ -3,10 +3,14 @@
 CXX	= clang++
 VK_SDK	= $(HOME)/git/vulkan-sdk/
 
+CXXFLAGS  = \
+	-D CONFIG_VALIDATION_LAYERS
+
 NAME	= main.elf
 
 $(NAME): vulkan.pcm main.cpp
 	$(CXX) \
+		$(CXXFLAGS) \
 		-std=c++23 \
 		-fmodule-file=vulkan.pcm \
 		-Wno-eager-load-cxx-named-modules \
@@ -16,7 +20,7 @@ $(NAME): vulkan.pcm main.cpp
 
 vulkan.pcm:
 	$(CXX) \
-		-D VULKAN_HPP_NO_STRUCT_CONSTRUCTORS \
+		$(CXXFLAGS) \
 		-I $(VK_SDK)/x86_64/include/ \
 		--precompile \
 		-o vulkan.pcm \
