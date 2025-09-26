@@ -12,6 +12,7 @@ import vulkan_hpp;
 #include <iostream>
 #include <vector>
 #include <cstring>
+#include <algorithm>
 
 using namespace std::string_literals;
 
@@ -85,31 +86,19 @@ private:
         }
 
         for (const char *req_ext : req_extensions) {
-            bool found = false;
-
-            for (const vk::ExtensionProperties &supp_ext : supp_extensions) {
-                if (strcmp(supp_ext.extensionName, req_ext) == 0) {
-                    found = true;
-                    break;
-                }
-            }
-
-            if (not found) {
+            if (std::ranges::none_of(supp_extensions,
+                                     [req_ext](const auto &supp_ext) {
+                                        return strcmp(supp_ext.extensionName, req_ext) == 0;
+                                     })) {
                 throw std::runtime_error("required GLFW extension not supported: "s + req_ext);
             }
         }
 
         for (const char *req_layer : validation_layers) {
-            bool found = false;
-
-            for (const vk::LayerProperties &supp_layer : supp_layers) {
-                if (strcmp(supp_layer.layerName, req_layer) == 0) {
-                    found = true;
-                    break;
-                }
-            }
-
-            if (not found) {
+            if (std::ranges::none_of(supp_layers,
+                                     [req_layer](const auto &supp_layer) {
+                                        return strcmp(supp_layer.layerName, req_layer) == 0;
+                                     })) {
                 throw std::runtime_error("required validation layer not suported: "s + req_layer);
             }
         }
