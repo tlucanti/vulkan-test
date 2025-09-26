@@ -1,6 +1,4 @@
 
-#define VULKAN_HPP_NO_STRUCT_CONSTRUCTORS
-
 #ifdef __CLANGD__
 #include <utility>
 #include <vulkan/vulkan_raii.hpp>
@@ -16,6 +14,19 @@ import vulkan_hpp;
 #include <cstring>
 
 using namespace std::string_literals;
+
+constexpr uint32_t WIDTH = 800;
+constexpr uint32_t HEIGHT = 600;
+
+const std::vector<const char *> validation_layers = {
+    "VK_LAYER_KHRONOS_validation",
+};
+
+#if CONFIG_VALIDATION_LAYERS
+constexpr bool enable_validation_layers = true;
+#else
+constexpr bool enable_validation_layers = false;
+#endif
 
 class Engine {
 public:
@@ -34,9 +45,6 @@ private:
 
     void init_window(void)
     {
-        constexpr uint32_t WIDTH = 800;
-        constexpr uint32_t HEIGHT = 600;
-
         glfwInit();
 
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
@@ -50,46 +58,62 @@ private:
         create_instance();
     }
 
-    void create_instance(void)
+    std::vector<const char *> get_required_extensions()
     {
         uint32_t glfw_extension_count = 0;
         const char **glfw_extensions = glfwGetRequiredInstanceExtensions(&glfw_extension_count);
-        std::vector<vk::ExtensionProperties> extention_properties = context.enumerateInstanceExtensionProperties();
+
+        std::vector extensions(glfw_extensions, glfw_extensions + glfw_extension_count);
+        if (CONFIG_VALIDATION_LAYERS) {
+            extensions.push_back(vk::EXTDebugUtilsExtensionName);
+        }
+
+        return extensions;
+    }
+
+    void create_instance(void)
+    {
+        std::vector<const char *>req_extensions = get_required_extensions();
+        std::vector<vk::ExtensionProperties> supp_extensions = context.enumerateInstanceExtensionProperties();
+        std::vector<vk::LayerProperties> supp_layers = context.enumerateInstanceLayerProperties();
 
         std::cout << "Avaliable extensions:\n";
-        for (const vk::ExtensionProperties &ext : extention_properties) {
+        for (const vk::ExtensionProperties &ext : supp_extensions) {
             std::cout << '\t' << ext.extensionName << '\n';
         }
 
-        for (uint32_t i = 0; i < glfw_extension_count; i++) {
+        for (const char *req_ext : req_extensions) {
             bool found = false;
 
-            for (const vk::ExtensionProperties &ext : extention_properties) {
-                if (strcmp(ext.extensionName, glfw_extensions[i]) == 0) {
+            for (const vk::ExtensionProperties &supp_ext : supp_extensions) {
+                if (strcmp(supp_ext.extensionName, req_ext) == 0) {
                     found = true;
                     break;
                 }
             }
 
             if (not found) {
-                throw std::runtime_error("required GLFW extension not supported: "s + glfw_extensions[i]);
+                throw std::runtime_error("required GLFW extension not supported: "s + req_ext);
             }
         }
 
-        constexpr vk::ApplicationInfo app_info = {
-            .pApplicationName = "vulkan",
-            .applicationVersion = 1,
-            .pEngineName = "No engine",
-            .engineVersion = 1,
-            .apiVersion = vk::ApiVersion14,
-        };
+        for (const char *req_layer : validation_layers) {
+            bool found = false;
 
-        vk::InstanceCreateInfo create_info = {
-            .pApplicationInfo = &app_info,
-            .enabledExtensionCount = glfw_extension_count,
-            .ppEnabledExtensionNames = glfw_extensions,
-        };
+            for (const vk::LayerProperties &supp_layer : supp_layers) {
+                if (strcmp(supp_layer.layerName, req_layer) == 0) {
+                    found = true;
+                    break;
+                }
+            }
 
+            if (not found) {
+                throw std::runtime_error("required validation layer not suported: "s + req_layer);
+            }
+        }
+
+        constexpr vk::ApplicationInfo app_info("vulkan", 1, "No engine", 1, vk::ApiVersion14);
+        vk::InstanceCreateInfo create_info({}, &app_info, validation_layers, req_extensions);
         instance = vk::raii::Instance(context, create_info);
     }
 
