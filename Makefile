@@ -1,19 +1,22 @@
 #!/bin/bash
 
 CXX	= clang++
-VK_SDK	= $(HOME)/git/vulkan-sdk/
+VK_SDK	= $(PWD)/../vulkan-sdk/
 
 CXXFLAGS  = \
-	-D CONFIG_VALIDATION_LAYERS
+	-O0 -g3 \
+	-std=c++23 \
+	-I $(VK_SDK)/x86_64/include/ \
+	-Wno-eager-load-cxx-named-modules \
+	-D CONFIG_VALIDATION_LAYERS=1 \
+	-D CONFIG_VERBOSE=1
 
 NAME	= main.elf
 
 $(NAME): Makefile vulkan.pcm main.cpp engine.cpp engine.hpp
 	$(CXX) \
 		$(CXXFLAGS) \
-		-std=c++23 \
 		-fmodule-file=vulkan.pcm \
-		-Wno-eager-load-cxx-named-modules \
 		main.cpp engine.cpp \
 		-l glfw \
 		-o main.elf
@@ -21,10 +24,8 @@ $(NAME): Makefile vulkan.pcm main.cpp engine.cpp engine.hpp
 vulkan.pcm: Makefile
 	$(CXX) \
 		$(CXXFLAGS) \
-		-I $(VK_SDK)/x86_64/include/ \
 		--precompile \
 		-o vulkan.pcm \
-		-std=c++23 \
 		$(VK_SDK)/x86_64/include/vulkan/vulkan.cppm
 
 clean:

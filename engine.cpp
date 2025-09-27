@@ -58,15 +58,18 @@ void Engine::init_vulkan(void)
 
 void Engine::create_instance(void)
 {
-    std::vector<const char *>req_extensions = get_required_instance_extensions();
+    std::vector<const char *>            req_extensions  = get_required_instance_extensions();
     std::vector<vk::ExtensionProperties> supp_extensions = this->context.enumerateInstanceExtensionProperties();
-    std::vector<vk::LayerProperties> supp_layers = this->context.enumerateInstanceLayerProperties();
+    std::vector<vk::LayerProperties>     supp_layers     = this->context.enumerateInstanceLayerProperties();
 
-    std::cout << "Avaliable extensions:\n";
-    for (const vk::ExtensionProperties &ext : supp_extensions) {
-        std::cout << '\t' << ext.extensionName << '\n';
+
+    if (CONFIG_VERBOSE) {
+        std::cout << "Avaliable extensions:\n";
+        for (const vk::ExtensionProperties &ext : supp_extensions) {
+            std::cout << '\t' << ext.extensionName << '\n';
+        }
+        std::cout << '\n';
     }
-    std::cout << '\n';
 
     for (const char *req_ext : req_extensions) {
         if (std::ranges::none_of(supp_extensions,
@@ -91,15 +94,21 @@ void Engine::create_instance(void)
                                        "No engine",
                                        vk::makeVersion(1, 0, 0),
                                        vk::ApiVersion14);
+
     vk::InstanceCreateInfo create_info({},
                                        &app_info,
                                        g_validation_layers,
                                        req_extensions);
+
     this->instance = vk::raii::Instance(this->context, create_info);
 }
 
 void Engine::setup_debug_messanger(void)
 {
+    if (not CONFIG_VALIDATION_LAYERS) {
+        return;
+    }
+
     vk::DebugUtilsMessageSeverityFlagsEXT severity_flags(vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose |
                                                          vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning |
                                                          vk::DebugUtilsMessageSeverityFlagBitsEXT::eError);
@@ -118,19 +127,22 @@ void Engine::setup_debug_messanger(void)
 
 void Engine::pick_physical_device(void)
 {
-    std::vector<vk::raii::PhysicalDevice> devices = this->instance.enumeratePhysicalDevices();
+    std::vector<vk::raii::PhysicalDevice>        devices = this->instance.enumeratePhysicalDevices();
     std::multimap<int, vk::raii::PhysicalDevice> candidates;
 
     if (devices.empty()) {
         throw std::runtime_error("no GPU devices with vulkan support");
     }
-    std::cout << "Avaliable physical devices:\n";
-    for (const vk::raii::PhysicalDevice &pd : devices) {
-        vk::PhysicalDeviceProperties props = pd.getProperties();
-        std::cout << '\t' << props.deviceName << '\n';
 
+    if (CONFIG_VERBOSE) {
+        std::cout << "Avaliable physical devices:\n";
+        for (const vk::raii::PhysicalDevice &pd : devices) {
+            vk::PhysicalDeviceProperties props = pd.getProperties();
+            std::cout << '\t' << props.deviceName << '\n';
+
+        }
+        std::cout << '\n';
     }
-    std::cout << '\n';
 
     for (const vk::raii::PhysicalDevice &pd : devices) {
         vk::PhysicalDeviceProperties props = pd.getProperties();
@@ -142,15 +154,17 @@ void Engine::pick_physical_device(void)
     }
 
     this->physical_device = candidates.rbegin()->second;
-    std::cout << "Selected device: " << this->physical_device.getProperties().deviceName
-              << " (with score " << candidates.rbegin()->first << ")\n";
+    if (CONFIG_VERBOSE) {
+        std::cout << "Selected device: " << this->physical_device.getProperties().deviceName
+                  << " (with score " << candidates.rbegin()->first << ")\n";
+    }
 }
 
 void Engine::create_logical_device(void)
 {
-    uint32_t graphics_index = get_graphics_family_index(this->physical_device);
-    std::vector<const char *>extensions = get_required_device_extensions();
-    std::vector<float> priority = { 1.0f };
+    uint32_t                  graphics_index = get_graphics_family_index(this->physical_device);
+    std::vector<const char *> extensions     = get_required_device_extensions();
+    std::vector<float>        priority       = { 1.0f };
 
     vk::StructureChain<vk::PhysicalDeviceFeatures2,
                        vk::PhysicalDeviceVulkan13Features,
@@ -160,14 +174,19 @@ void Engine::create_logical_device(void)
         vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT().setExtendedDynamicState(true),
     };
 
-    vk::DeviceQueueCreateInfo queue_create_info({}, graphics_index, priority);
+    vk::DeviceQueueCreateInfo queue_create_info({},
+                                                graphics_index,
+                                                priority);
+
     std::vector<vk::DeviceQueueCreateInfo> queue_infos = { queue_create_info };
+
     vk::DeviceCreateInfo create_info({},
                                      queue_infos,
                                      {},
                                      extensions,
                                      {},
                                      &feature_chain.get<vk::PhysicalDeviceFeatures2>());
+
     this->device = vk::raii::Device(this->physical_device, create_info);
     this->graphics_queue = vk::raii::Queue(this->device, graphics_index, 0);
 }
@@ -191,7 +210,7 @@ void Engine::cleanup(void)
 uint32_t Engine::get_graphics_family_index(const vk::raii::PhysicalDevice &pd)
 {
     std::vector<vk::QueueFamilyProperties> props = pd.getQueueFamilyProperties();
-    uint32_t idx = 0;
+    uint32_t                               idx   = 0;
 
     for (const vk::QueueFamilyProperties &qfp : props) {
         if ((qfp.queueFlags & vk::QueueFlagBits::eGraphics) != vk::QueueFlagBits{}) {
@@ -205,13 +224,13 @@ uint32_t Engine::get_graphics_family_index(const vk::raii::PhysicalDevice &pd)
 
 int Engine::get_physical_device_score(const vk::raii::PhysicalDevice &pd)
 {
-    std::vector<const char *> req_extensions = get_required_device_extensions();
-    std::vector<vk::ExtensionProperties> supp_extensions = pd.enumerateDeviceExtensionProperties();
-    std::vector<vk::QueueFamilyProperties> queue_families = pd.getQueueFamilyProperties();
-    vk::PhysicalDeviceProperties props = pd.getProperties();
-    vk::PhysicalDeviceFeatures features = pd.getFeatures();
-    int score = 0;
-    constexpr int NOT_SUTABLE = -1;
+    std::vector<const char *>              req_extensions  = get_required_device_extensions();
+    std::vector<vk::ExtensionProperties>   supp_extensions = pd.enumerateDeviceExtensionProperties();
+    std::vector<vk::QueueFamilyProperties> queue_families  = pd.getQueueFamilyProperties();
+    vk::PhysicalDeviceProperties           props           = pd.getProperties();
+    vk::PhysicalDeviceFeatures             features        = pd.getFeatures();
+    int                                    score           = 0;
+    constexpr int                          NOT_SUTABLE     = -1;
 
     if (props.apiVersion < vk::ApiVersion13) {
         return NOT_SUTABLE;
@@ -258,8 +277,8 @@ std::vector<const char *> Engine::get_required_device_extensions(void)
 
 std::vector<const char *> Engine::get_required_instance_extensions(void)
 {
-    uint32_t glfw_extension_count = 0;
-    const char **glfw_extensions = glfwGetRequiredInstanceExtensions(&glfw_extension_count);
+    uint32_t     glfw_extension_count = 0;
+    const char **glfw_extensions      = glfwGetRequiredInstanceExtensions(&glfw_extension_count);
 
     std::vector extensions(glfw_extensions, glfw_extensions + glfw_extension_count);
     if (CONFIG_VALIDATION_LAYERS) {
