@@ -1,5 +1,7 @@
+#ifndef ENGINE_HPP
+#define ENGINE_HPP
 
-#ifdef __CLANGD__
+#if defined(__CLANGD__) && !defined(__CLANGD_NO_ENGINE_HPP__)
 #include <vulkan/vulkan_raii.hpp>
 #else
 import vulkan_hpp;
@@ -20,6 +22,7 @@ private:
         // init_vulkan functions
         void create_instance(void);
         void setup_debug_messanger(void);
+        void pick_physical_device(void);
     void main_loop(void);
     void cleanup(void);
 
@@ -36,5 +39,8 @@ private:
     vk::raii::Context  context;
     vk::raii::Instance instance = nullptr;
     vk::raii::DebugUtilsMessengerEXT debug_messenger = nullptr;
+    vk::raii::PhysicalDevice physical_device = nullptr;
 
 };
+
+#endif /* ENGINE_HPP */
