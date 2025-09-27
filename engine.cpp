@@ -1,4 +1,5 @@
 
+#define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
 #include <algorithm>
@@ -6,6 +7,7 @@
 #include <iostream>
 #include <map>
 #include <stdexcept>
+#include <tuple>
 #include <vector>
 
 #ifdef __CLANGD__
@@ -53,6 +55,7 @@ void Engine::init_vulkan(void)
 {
     create_instance();
     setup_debug_messanger();
+    create_surface();
     pick_physical_device();
 }
 
@@ -125,6 +128,17 @@ void Engine::setup_debug_messanger(void)
     this->debug_messenger = this->instance.createDebugUtilsMessengerEXT(create_info);
 }
 
+void Engine::create_surface(void)
+{
+    VkSurfaceKHR csurface;
+
+    if (glfwCreateWindowSurface(*this->instance, this->window, nullptr, &csurface)) {
+        throw std::runtime_error("faied to create window surface");
+    }
+
+    this->surface = vk::raii::SurfaceKHR(this->instance, csurface);
+}
+
 void Engine::pick_physical_device(void)
 {
     std::vector<vk::raii::PhysicalDevice>        devices = this->instance.enumeratePhysicalDevices();
@@ -162,9 +176,11 @@ void Engine::pick_physical_device(void)
 
 void Engine::create_logical_device(void)
 {
-    uint32_t                  graphics_index = get_graphics_family_index(this->physical_device);
     std::vector<const char *> extensions     = get_required_device_extensions();
     std::vector<float>        priority       = { 1.0f };
+    uint32_t                  graphics_index, present_index;
+
+    std::tie(graphics_index, present_index) = get_graphics_present_family_indexes(this->physical_device, this->surface);
 
     vk::StructureChain<vk::PhysicalDeviceFeatures2,
                        vk::PhysicalDeviceVulkan13Features,
@@ -189,6 +205,7 @@ void Engine::create_logical_device(void)
 
     this->device = vk::raii::Device(this->physical_device, create_info);
     this->graphics_queue = vk::raii::Queue(this->device, graphics_index, 0);
+    this->present_queue = vk::raii::Queue(this->device, present_index, 0);
 }
 
 void Engine::main_loop(void)
@@ -207,19 +224,37 @@ void Engine::cleanup(void)
 // ====================================================================================================================
 // util functions
 
-uint32_t Engine::get_graphics_family_index(const vk::raii::PhysicalDevice &pd)
+std::pair<uint32_t, uint32_t> Engine::get_graphics_present_family_indexes(const vk::raii::PhysicalDevice &pd,
+                                                                          const vk::raii::SurfaceKHR &surface)
 {
-    std::vector<vk::QueueFamilyProperties> props = pd.getQueueFamilyProperties();
-    uint32_t                               idx   = 0;
+    std::vector<vk::QueueFamilyProperties> props        = pd.getQueueFamilyProperties();
+    uint32_t                               idx          = 0;
+    uint32_t                               graphics_idx = -1;
+    uint32_t                               present_idx  = -1;
 
     for (const vk::QueueFamilyProperties &qfp : props) {
-        if ((qfp.queueFlags & vk::QueueFlagBits::eGraphics) != vk::QueueFlagBits{}) {
-            return idx;
+        // try to get single queue with both drawing and presentation support
+        if ((qfp.queueFlags & vk::QueueFlagBits::eGraphics) != vk::QueueFlagBits{} &&
+            pd.getSurfaceSupportKHR(idx, *surface)) {
+            return std::make_pair(idx, idx);
         }
+
+        if ((qfp.queueFlags & vk::QueueFlagBits::eGraphics) != vk::QueueFlagBits{}) {
+            graphics_idx = idx;
+        }
+
+        if (pd.getSurfaceSupportKHR(idx, *surface)) {
+            present_idx = idx;
+        }
+
         idx++;
     }
 
-    throw std::runtime_error("no graphics queue family found");
+    if (graphics_idx == -1 || present_idx == -1) {
+        throw std::runtime_error("no graphics or present queue family found");
+    }
+
+    return std::make_pair(graphics_idx, present_idx);
 }
 
 int Engine::get_physical_device_score(const vk::raii::PhysicalDevice &pd)
