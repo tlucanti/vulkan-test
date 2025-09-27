@@ -27,7 +27,11 @@ private:
     void cleanup(void);
 
     // util functions
-    static std::vector<const char *> get_required_extensions();
+    static int get_physical_device_score(const vk::raii::PhysicalDevice &pd);
+
+    static std::vector<const char *> get_required_device_extensions();
+
+    static std::vector<const char *> get_required_instance_extensions();
 
     static vk::Bool32 debug_callback(
         vk::DebugUtilsMessageSeverityFlagBitsEXT severity,
