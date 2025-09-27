@@ -17,13 +17,17 @@ public:
     void run(void);
 
 private:
+    // run functions
     void init_window(void);
     void init_vulkan(void);
-    std::vector<const char *> get_required_extensions();
-    void create_instance(void);
-    void setup_debug_messanger(void);
+        // init_vulkan functions
+        void create_instance(void);
+        void setup_debug_messanger(void);
     void main_loop(void);
     void cleanup(void);
+
+    // util functions
+    static std::vector<const char *> get_required_extensions();
 
     static vk::Bool32 debug_callback(
         vk::DebugUtilsMessageSeverityFlagBitsEXT severity,
