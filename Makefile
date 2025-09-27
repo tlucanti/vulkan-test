@@ -8,17 +8,17 @@ CXXFLAGS  = \
 
 NAME	= main.elf
 
-$(NAME): vulkan.pcm main.cpp
+$(NAME): Makefile vulkan.pcm main.cpp engine.cpp engine.hpp
 	$(CXX) \
 		$(CXXFLAGS) \
 		-std=c++23 \
 		-fmodule-file=vulkan.pcm \
 		-Wno-eager-load-cxx-named-modules \
-		main.cpp \
+		main.cpp engine.cpp \
 		-l glfw \
 		-o main.elf
 
-vulkan.pcm:
+vulkan.pcm: Makefile
 	$(CXX) \
 		$(CXXFLAGS) \
 		-I $(VK_SDK)/x86_64/include/ \

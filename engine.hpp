@@ -1,9 +1,6 @@
 
 #ifdef __CLANGD__
-#undef VULKAN_HPP_NO_STRUCT_CONSTRUCTORS
-#undef VULKAN_HPP_DISABLE_ENHANCED_MODE
-#undef VULKAN_HPP_NO_STRUCT_SETTERS
-#include "vulkan/vulkan.cppm"
+#include <vulkan/vulkan_raii.hpp>
 #else
 import vulkan_hpp;
 #endif
