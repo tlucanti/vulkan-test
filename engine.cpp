@@ -7,16 +7,17 @@
 #include <cstring>
 #include <algorithm>
 
-#include "engine.hpp"
-
 #ifdef __CLANGD__
 #undef VULKAN_HPP_NO_STRUCT_CONSTRUCTORS
 #undef VULKAN_HPP_DISABLE_ENHANCED_MODE
 #undef VULKAN_HPP_NO_STRUCT_SETTERS
 #include "vulkan/vulkan.cppm"
+#define __CLANGD_NO_ENGINE_HPP__
 #else
 import vulkan_hpp;
 #endif
+
+#include "engine.hpp"
 
 using namespace std::string_literals;
 
@@ -55,6 +56,7 @@ void Engine::init_vulkan(void)
 {
     create_instance();
     setup_debug_messanger();
+    pick_physical_device();
 }
 
 void Engine::create_instance(void)
@@ -108,6 +110,11 @@ void Engine::setup_debug_messanger(void)
     vk::DebugUtilsMessengerCreateInfoEXT create_info({}, severity_flags, message_type_flags, &debug_callback);
 
     debug_messenger = instance.createDebugUtilsMessengerEXT(create_info);
+}
+
+void Engine::pick_physical_device(void)
+{
+    std::vector<vk::raii::PhysicalDevice> devices = instance.enumeratePhysicalDevices();
 }
 
 void Engine::main_loop(void)
