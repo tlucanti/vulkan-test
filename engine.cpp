@@ -1,11 +1,14 @@
 
 #include <GLFW/glfw3.h>
 
-#include <stdexcept>
-#include <iostream>
-#include <vector>
-#include <cstring>
 #include <algorithm>
+#include <cstring>
+#include <iostream>
+#include <map>
+#include <pthread.h>
+#include <stdexcept>
+#include <type_traits>
+#include <vector>
 
 #ifdef __CLANGD__
 #undef VULKAN_HPP_NO_STRUCT_CONSTRUCTORS
@@ -61,7 +64,7 @@ void Engine::init_vulkan(void)
 
 void Engine::create_instance(void)
 {
-    std::vector<const char *>req_extensions = get_required_extensions();
+    std::vector<const char *>req_extensions = get_required_instance_extensions();
     std::vector<vk::ExtensionProperties> supp_extensions = context.enumerateInstanceExtensionProperties();
     std::vector<vk::LayerProperties> supp_layers = context.enumerateInstanceLayerProperties();
 
@@ -69,6 +72,7 @@ void Engine::create_instance(void)
     for (const vk::ExtensionProperties &ext : supp_extensions) {
         std::cout << '\t' << ext.extensionName << '\n';
     }
+    std::cout << '\n';
 
     for (const char *req_ext : req_extensions) {
         if (std::ranges::none_of(supp_extensions,
@@ -115,6 +119,31 @@ void Engine::setup_debug_messanger(void)
 void Engine::pick_physical_device(void)
 {
     std::vector<vk::raii::PhysicalDevice> devices = instance.enumeratePhysicalDevices();
+    std::multimap<int, vk::raii::PhysicalDevice> candidates;
+
+    if (devices.empty()) {
+        throw std::runtime_error("no GPU devices with vulkan support");
+    }
+    std::cout << "Avaliable physical devices:\n";
+    for (const vk::raii::PhysicalDevice &pd : devices) {
+        vk::PhysicalDeviceProperties props = pd.getProperties();
+        std::cout << '\t' << props.deviceName << '\n';
+
+    }
+    std::cout << '\n';
+
+    for (const vk::raii::PhysicalDevice &pd : devices) {
+        vk::PhysicalDeviceProperties props = pd.getProperties();
+        candidates.insert({get_physical_device_score(pd), pd});
+    }
+
+    if (candidates.empty() || candidates.rbegin()->first < 0) {
+        throw std::runtime_error("failed to find sutable GPU");
+    }
+
+    physical_device = candidates.rbegin()->second;
+    std::cout << "Selected device: " << physical_device.getProperties().deviceName
+              << " (with score " << candidates.rbegin()->first << ")\n";
 }
 
 void Engine::main_loop(void)
@@ -133,7 +162,60 @@ void Engine::cleanup(void)
 // ====================================================================================================================
 // util functions
 
-std::vector<const char *> Engine::get_required_extensions()
+int Engine::get_physical_device_score(const vk::raii::PhysicalDevice &pd)
+{
+    std::vector<const char *> req_extensions = get_required_device_extensions();
+    std::vector<vk::ExtensionProperties> supp_extensions = pd.enumerateDeviceExtensionProperties();
+    std::vector<vk::QueueFamilyProperties> queue_families = pd.getQueueFamilyProperties();
+    vk::PhysicalDeviceProperties props = pd.getProperties();
+    vk::PhysicalDeviceFeatures features = pd.getFeatures();
+    int score = 0;
+    constexpr int NOT_SUTABLE = -1;
+
+    if (props.apiVersion < vk::ApiVersion13) {
+        return NOT_SUTABLE;
+    }
+
+    if (not features.geometryShader) {
+        return NOT_SUTABLE;
+    }
+
+    if (std::ranges::none_of(queue_families,
+                             [](const vk::QueueFamilyProperties &qfp) {
+                                 return (qfp.queueFlags & vk::QueueFlagBits::eGraphics) != vk::QueueFlagBits{};
+                             })) {
+        return NOT_SUTABLE;
+    }
+
+    for (const char *req_ext : req_extensions) {
+        if (std::ranges::none_of(supp_extensions,
+                                 [req_ext](const vk::ExtensionProperties &supp_ext) {
+                                     return strcmp(supp_ext.extensionName, req_ext) == 0;
+                                 })) {
+            return NOT_SUTABLE;
+        }
+    }
+
+    if (props.deviceType == vk::PhysicalDeviceType::eDiscreteGpu) {
+        score += 10000;
+    }
+
+    score += props.limits.maxImageDimension2D;
+
+    return score;
+}
+
+std::vector<const char *> Engine::get_required_device_extensions(void)
+{
+    return {
+        vk::KHRSwapchainExtensionName,
+        vk::KHRSpirv14ExtensionName,
+        vk::KHRSynchronization2ExtensionName,
+        vk::KHRCreateRenderpass2ExtensionName,
+    };
+}
+
+std::vector<const char *> Engine::get_required_instance_extensions(void)
 {
     uint32_t glfw_extension_count = 0;
     const char **glfw_extensions = glfwGetRequiredInstanceExtensions(&glfw_extension_count);
@@ -151,7 +233,7 @@ vk::Bool32 Engine::debug_callback(
     vk::DebugUtilsMessageTypeFlagsEXT type,
     const vk::DebugUtilsMessengerCallbackDataEXT *callback_data, void *)
 {
-    if (severity >= vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose) {
+    if (severity >= vk::DebugUtilsMessageSeverityFlagBitsEXT::eInfo) {
         std::cerr << "validation layer" << " msg: " << callback_data->pMessage << std::endl;
     }
     return vk::False;
