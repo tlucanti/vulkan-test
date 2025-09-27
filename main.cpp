@@ -49,19 +49,6 @@ void Engine::init_vulkan(void)
     setup_debug_messanger();
 }
 
-std::vector<const char *> Engine::get_required_extensions()
-{
-    uint32_t glfw_extension_count = 0;
-    const char **glfw_extensions = glfwGetRequiredInstanceExtensions(&glfw_extension_count);
-
-    std::vector extensions(glfw_extensions, glfw_extensions + glfw_extension_count);
-    if (CONFIG_VALIDATION_LAYERS) {
-        extensions.push_back(vk::EXTDebugUtilsExtensionName);
-    }
-
-    return extensions;
-}
-
 void Engine::create_instance(void)
 {
     std::vector<const char *>req_extensions = get_required_extensions();
@@ -126,6 +113,22 @@ void Engine::cleanup(void)
 {
     glfwDestroyWindow(window);
     glfwTerminate();
+}
+
+// ====================================================================================================================
+// util functions
+
+std::vector<const char *> Engine::get_required_extensions()
+{
+    uint32_t glfw_extension_count = 0;
+    const char **glfw_extensions = glfwGetRequiredInstanceExtensions(&glfw_extension_count);
+
+    std::vector extensions(glfw_extensions, glfw_extensions + glfw_extension_count);
+    if (CONFIG_VALIDATION_LAYERS) {
+        extensions.push_back(vk::EXTDebugUtilsExtensionName);
+    }
+
+    return extensions;
 }
 
 vk::Bool32 Engine::debug_callback(
