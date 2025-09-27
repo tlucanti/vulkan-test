@@ -1,10 +1,12 @@
 #ifndef ENGINE_HPP
 #define ENGINE_HPP
 
-#if defined(__CLANGD__) && !defined(__CLANGD_NO_ENGINE_HPP__)
-#include <vulkan/vulkan_raii.hpp>
+#if defined(__CLANGD__)
+# if !defined(__CLANGD_NO_ENGINE_HPP__)
+#  include <vulkan/vulkan_raii.hpp>
+# endif
 #else
-import vulkan_hpp;
+  import vulkan_hpp;
 #endif
 
 #include <GLFW/glfw3.h>
