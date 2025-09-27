@@ -146,6 +146,32 @@ void Engine::pick_physical_device(void)
               << " (with score " << candidates.rbegin()->first << ")\n";
 }
 
+void Engine::create_logical_device(void)
+{
+    uint32_t graphics_index = get_graphics_family_index(this->physical_device);
+    std::vector<const char *>extensions = get_required_device_extensions();
+    std::vector<float> priority = { 1.0f };
+
+    vk::StructureChain<vk::PhysicalDeviceFeatures2,
+                       vk::PhysicalDeviceVulkan13Features,
+                       vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT> feature_chain = {
+        vk::PhysicalDeviceFeatures2(),
+        vk::PhysicalDeviceVulkan13Features().setDynamicRendering(true),
+        vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT().setExtendedDynamicState(true),
+    };
+
+    vk::DeviceQueueCreateInfo queue_create_info({}, graphics_index, priority);
+    std::vector<vk::DeviceQueueCreateInfo> queue_infos = { queue_create_info };
+    vk::DeviceCreateInfo create_info({},
+                                     queue_infos,
+                                     {},
+                                     extensions,
+                                     {},
+                                     &feature_chain.get<vk::PhysicalDeviceFeatures2>());
+    this->device = vk::raii::Device(this->physical_device, create_info);
+    this->graphics_queue = vk::raii::Queue(this->device, graphics_index, 0);
+}
+
 void Engine::main_loop(void)
 {
     while (not glfwWindowShouldClose(this->window)) {
@@ -161,6 +187,21 @@ void Engine::cleanup(void)
 
 // ====================================================================================================================
 // util functions
+
+uint32_t Engine::get_graphics_family_index(const vk::raii::PhysicalDevice &pd)
+{
+    std::vector<vk::QueueFamilyProperties> props = pd.getQueueFamilyProperties();
+    uint32_t idx = 0;
+
+    for (const vk::QueueFamilyProperties &qfp : props) {
+        if ((qfp.queueFlags & vk::QueueFlagBits::eGraphics) != vk::QueueFlagBits{}) {
+            return idx;
+        }
+        idx++;
+    }
+
+    throw std::runtime_error("no graphics queue family found");
+}
 
 int Engine::get_physical_device_score(const vk::raii::PhysicalDevice &pd)
 {
