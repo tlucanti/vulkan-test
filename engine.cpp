@@ -5,19 +5,17 @@
 #include <cstring>
 #include <iostream>
 #include <map>
-#include <pthread.h>
 #include <stdexcept>
-#include <type_traits>
 #include <vector>
 
 #ifdef __CLANGD__
-#undef VULKAN_HPP_NO_STRUCT_CONSTRUCTORS
-#undef VULKAN_HPP_DISABLE_ENHANCED_MODE
-#undef VULKAN_HPP_NO_STRUCT_SETTERS
-#include "vulkan/vulkan.cppm"
-#define __CLANGD_NO_ENGINE_HPP__
+# undef VULKAN_HPP_NO_STRUCT_CONSTRUCTORS
+# undef VULKAN_HPP_DISABLE_ENHANCED_MODE
+# undef VULKAN_HPP_NO_STRUCT_SETTERS
+# include "vulkan/vulkan.cppm"
+# define __CLANGD_NO_ENGINE_HPP__
 #else
-import vulkan_hpp;
+  import vulkan_hpp;
 #endif
 
 #include "engine.hpp"
@@ -27,15 +25,11 @@ using namespace std::string_literals;
 constexpr uint32_t WIDTH = 800;
 constexpr uint32_t HEIGHT = 600;
 
-const std::vector<const char *> validation_layers = {
-    "VK_LAYER_KHRONOS_validation",
-};
-
+const std::vector<const char *> g_validation_layers = {
 #if CONFIG_VALIDATION_LAYERS
-constexpr bool enable_validation_layers = true;
-#else
-constexpr bool enable_validation_layers = false;
+    "VK_LAYER_KHRONOS_validation",
 #endif
+};
 
 void Engine::run(void)
 {
@@ -52,7 +46,7 @@ void Engine::init_window(void)
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
-    window = glfwCreateWindow(WIDTH, HEIGHT, "vulkan", nullptr, nullptr);
+    this->window = glfwCreateWindow(WIDTH, HEIGHT, "vulkan", nullptr, nullptr);
 }
 
 void Engine::init_vulkan(void)
@@ -65,8 +59,8 @@ void Engine::init_vulkan(void)
 void Engine::create_instance(void)
 {
     std::vector<const char *>req_extensions = get_required_instance_extensions();
-    std::vector<vk::ExtensionProperties> supp_extensions = context.enumerateInstanceExtensionProperties();
-    std::vector<vk::LayerProperties> supp_layers = context.enumerateInstanceLayerProperties();
+    std::vector<vk::ExtensionProperties> supp_extensions = this->context.enumerateInstanceExtensionProperties();
+    std::vector<vk::LayerProperties> supp_layers = this->context.enumerateInstanceLayerProperties();
 
     std::cout << "Avaliable extensions:\n";
     for (const vk::ExtensionProperties &ext : supp_extensions) {
@@ -83,7 +77,7 @@ void Engine::create_instance(void)
         }
     }
 
-    for (const char *req_layer : validation_layers) {
+    for (const char *req_layer : g_validation_layers) {
         if (std::ranges::none_of(supp_layers,
                                  [req_layer](const auto &supp_layer) {
                                     return strcmp(supp_layer.layerName, req_layer) == 0;
@@ -97,8 +91,11 @@ void Engine::create_instance(void)
                                        "No engine",
                                        vk::makeVersion(1, 0, 0),
                                        vk::ApiVersion14);
-    vk::InstanceCreateInfo create_info({}, &app_info, validation_layers, req_extensions);
-    instance = vk::raii::Instance(context, create_info);
+    vk::InstanceCreateInfo create_info({},
+                                       &app_info,
+                                       g_validation_layers,
+                                       req_extensions);
+    this->instance = vk::raii::Instance(this->context, create_info);
 }
 
 void Engine::setup_debug_messanger(void)
@@ -111,14 +108,17 @@ void Engine::setup_debug_messanger(void)
                                                          vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance |
                                                          vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation);
 
-    vk::DebugUtilsMessengerCreateInfoEXT create_info({}, severity_flags, message_type_flags, &debug_callback);
+    vk::DebugUtilsMessengerCreateInfoEXT create_info({},
+                                                     severity_flags,
+                                                     message_type_flags,
+                                                     &debug_callback);
 
-    debug_messenger = instance.createDebugUtilsMessengerEXT(create_info);
+    this->debug_messenger = this->instance.createDebugUtilsMessengerEXT(create_info);
 }
 
 void Engine::pick_physical_device(void)
 {
-    std::vector<vk::raii::PhysicalDevice> devices = instance.enumeratePhysicalDevices();
+    std::vector<vk::raii::PhysicalDevice> devices = this->instance.enumeratePhysicalDevices();
     std::multimap<int, vk::raii::PhysicalDevice> candidates;
 
     if (devices.empty()) {
@@ -141,21 +141,21 @@ void Engine::pick_physical_device(void)
         throw std::runtime_error("failed to find sutable GPU");
     }
 
-    physical_device = candidates.rbegin()->second;
-    std::cout << "Selected device: " << physical_device.getProperties().deviceName
+    this->physical_device = candidates.rbegin()->second;
+    std::cout << "Selected device: " << this->physical_device.getProperties().deviceName
               << " (with score " << candidates.rbegin()->first << ")\n";
 }
 
 void Engine::main_loop(void)
 {
-    while (not glfwWindowShouldClose(window)) {
+    while (not glfwWindowShouldClose(this->window)) {
         glfwPollEvents();
     }
 }
 
 void Engine::cleanup(void)
 {
-    glfwDestroyWindow(window);
+    glfwDestroyWindow(this->window);
     glfwTerminate();
 }
 
