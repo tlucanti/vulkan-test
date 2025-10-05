@@ -28,6 +28,7 @@ private:
         void pick_physical_device(void);
         void create_logical_device(void);
         void create_swapchain(void);
+        void create_image_views(void);
     void main_loop(void);
     void cleanup(void);
 
@@ -50,7 +51,7 @@ private:
                                                     void *);
 
 private:
-    GLFWwindow                       *window;
+    GLFWwindow                       *window         = nullptr;
 
     vk::raii::Context                context;
     vk::raii::Instance               instance        = nullptr;
@@ -63,9 +64,11 @@ private:
     vk::raii::Queue                  queue           = nullptr;
 
     vk::raii::SwapchainKHR           swapchain        = nullptr;
-    std::vector<vk::Image>           swapchain_images;
     vk::SurfaceFormatKHR             swapchain_surface_foramt;
     vk::Extent2D                     swapchain_extent;
+
+    std::vector<vk::Image>           swapchain_images;
+    std::vector<vk::raii::ImageView> swapchain_image_views;
 
 };
 

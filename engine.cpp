@@ -243,6 +243,22 @@ void Engine::create_swapchain(void)
     this->swapchain_images = this->swapchain.getImages();
 }
 
+void Engine::create_image_views(void)
+{
+    vk::ImageSubresourceRange sr(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1);
+    vk::ImageViewCreateInfo create_info({},
+                                        {},
+                                        vk::ImageViewType::e2D,
+                                        this->swapchain_surface_foramt.format,
+                                        {},
+                                        sr);
+
+    for (const vk::Image &image: this->swapchain_images) {
+        create_info.image = image;
+        this->swapchain_image_views.emplace_back(this->device, create_info);
+    }
+}
+
 void Engine::main_loop(void)
 {
     while (not glfwWindowShouldClose(this->window)) {
