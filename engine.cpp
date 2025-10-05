@@ -1,10 +1,12 @@
 
+#include <cstdint>
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
 #include <algorithm>
 #include <cstring>
 #include <iostream>
+#include <limits>
 #include <map>
 #include <stdexcept>
 #include <tuple>
@@ -57,6 +59,8 @@ void Engine::init_vulkan(void)
     setup_debug_messanger();
     create_surface();
     pick_physical_device();
+    create_logical_device();
+    create_swapchain();
 }
 
 void Engine::create_instance(void)
@@ -178,9 +182,7 @@ void Engine::create_logical_device(void)
 {
     std::vector<const char *> extensions     = get_required_device_extensions();
     std::vector<float>        priority       = { 1.0f };
-    uint32_t                  graphics_index, present_index;
-
-    std::tie(graphics_index, present_index) = get_graphics_present_family_indexes(this->physical_device, this->surface);
+    uint32_t                  queue_index    = get_queue_family_index(this->physical_device, this->surface);
 
     vk::StructureChain<vk::PhysicalDeviceFeatures2,
                        vk::PhysicalDeviceVulkan13Features,
@@ -191,7 +193,7 @@ void Engine::create_logical_device(void)
     };
 
     vk::DeviceQueueCreateInfo queue_create_info({},
-                                                graphics_index,
+                                                queue_index,
                                                 priority);
 
     std::vector<vk::DeviceQueueCreateInfo> queue_infos = { queue_create_info };
@@ -204,8 +206,41 @@ void Engine::create_logical_device(void)
                                      &feature_chain.get<vk::PhysicalDeviceFeatures2>());
 
     this->device = vk::raii::Device(this->physical_device, create_info);
-    this->graphics_queue = vk::raii::Queue(this->device, graphics_index, 0);
-    this->present_queue = vk::raii::Queue(this->device, present_index, 0);
+    this->queue = vk::raii::Queue(this->device, queue_index, 0);
+}
+
+void Engine::create_swapchain(void)
+{
+    vk::SurfaceCapabilitiesKHR        surface_capabilities   = this->physical_device.getSurfaceCapabilitiesKHR(this->surface);
+    vk::PresentModeKHR                swapchain_present_mode = choose_swapchain_present_mode(this->physical_device, this->surface);
+    uint32_t                          image_count;
+
+    this->swapchain_surface_foramt = choose_swapchain_surface_format(this->physical_device, this->surface);
+    this->swapchain_extent = choose_swapchain_extent(this->physical_device, this->surface, this->window);
+
+    image_count = surface_capabilities.minImageCount + 1;
+    if (surface_capabilities.maxImageCount) {
+        image_count = std::min(image_count, surface_capabilities.maxImageCount);
+    }
+
+    vk::SwapchainCreateInfoKHR create_info({},
+                                           surface,
+                                           image_count,
+                                           this->swapchain_surface_foramt.format,
+                                           this->swapchain_surface_foramt.colorSpace,
+                                           this->swapchain_extent,
+                                           1,
+                                           vk::ImageUsageFlagBits::eColorAttachment,
+                                           vk::SharingMode::eExclusive,
+                                           {},
+                                           surface_capabilities.currentTransform,
+                                           vk::CompositeAlphaFlagBitsKHR::eOpaque,
+                                           swapchain_present_mode,
+                                           true);
+
+
+    this->swapchain = vk::raii::SwapchainKHR(device, create_info);
+    this->swapchain_images = this->swapchain.getImages();
 }
 
 void Engine::main_loop(void)
@@ -224,37 +259,79 @@ void Engine::cleanup(void)
 // ====================================================================================================================
 // util functions
 
-std::pair<uint32_t, uint32_t> Engine::get_graphics_present_family_indexes(const vk::raii::PhysicalDevice &pd,
-                                                                          const vk::raii::SurfaceKHR &surface)
+vk::SurfaceFormatKHR Engine::choose_swapchain_surface_format(const vk::raii::PhysicalDevice &pd,
+                                                             const vk::raii::SurfaceKHR &surface)
+{
+    std::vector<vk::SurfaceFormatKHR> avaliable_formats = pd.getSurfaceFormatsKHR(surface);
+
+    if (avaliable_formats.empty()) {
+        throw std::runtime_error("no avaliable surface formats found");
+    }
+
+    // try to find format that supports SRGB
+    for (const vk::SurfaceFormatKHR &format : avaliable_formats) {
+        if (format.format == vk::Format::eB8G8R8Srgb &&
+            format.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear) {
+            return format;
+        }
+    }
+
+    // otherwise return any
+    return avaliable_formats.front();
+}
+
+vk::PresentModeKHR Engine::choose_swapchain_present_mode(const vk::raii::PhysicalDevice &pd,
+                                                         const vk::raii::SurfaceKHR &surface)
+{
+    std::vector<vk::PresentModeKHR>   avaliable_present_modes = pd.getSurfacePresentModesKHR(surface);
+
+    // try to use mailbox present mode if supported
+    if (std::ranges::contains(avaliable_present_modes, vk::PresentModeKHR::eMailbox)) {
+        return vk::PresentModeKHR::eMailbox;
+    }
+
+    // otherwise use FIFO present mode
+    if (not std::ranges::contains(avaliable_present_modes, vk::PresentModeKHR::eFifo)) {
+        throw std::runtime_error("FIFO present mode is not supported");
+    }
+    return vk::PresentModeKHR::eFifo;
+}
+
+vk::Extent2D Engine::choose_swapchain_extent(const vk::raii::PhysicalDevice &pd,
+                                             const vk::raii::SurfaceKHR &surface,
+                                             GLFWwindow *window)
+{
+    vk::SurfaceCapabilitiesKHR capabilities = pd.getSurfaceCapabilitiesKHR(surface);
+    int width, height;
+
+    if (capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max()) {
+        return capabilities.currentExtent;
+    }
+
+    glfwGetFramebufferSize(window, &width, &height);
+    width = std::clamp<uint32_t>(width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
+    height = std::clamp<uint32_t>(height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
+
+    return { static_cast<uint32_t>(width), static_cast<uint32_t>(height) };
+}
+
+uint32_t Engine::get_queue_family_index(const vk::raii::PhysicalDevice &pd,
+                                        const vk::raii::SurfaceKHR &surface)
 {
     std::vector<vk::QueueFamilyProperties> props        = pd.getQueueFamilyProperties();
     uint32_t                               idx          = 0;
-    uint32_t                               graphics_idx = -1;
-    uint32_t                               present_idx  = -1;
 
     for (const vk::QueueFamilyProperties &qfp : props) {
         // try to get single queue with both drawing and presentation support
         if ((qfp.queueFlags & vk::QueueFlagBits::eGraphics) != vk::QueueFlagBits{} &&
-            pd.getSurfaceSupportKHR(idx, *surface)) {
-            return std::make_pair(idx, idx);
-        }
-
-        if ((qfp.queueFlags & vk::QueueFlagBits::eGraphics) != vk::QueueFlagBits{}) {
-            graphics_idx = idx;
-        }
-
-        if (pd.getSurfaceSupportKHR(idx, *surface)) {
-            present_idx = idx;
+            pd.getSurfaceSupportKHR(idx, surface)) {
+            return idx;
         }
 
         idx++;
     }
 
-    if (graphics_idx == -1 || present_idx == -1) {
-        throw std::runtime_error("no graphics or present queue family found");
-    }
-
-    return std::make_pair(graphics_idx, present_idx);
+    throw std::runtime_error("no queue family for graphics and present found");
 }
 
 int Engine::get_physical_device_score(const vk::raii::PhysicalDevice &pd)
