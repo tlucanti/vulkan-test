@@ -11,6 +11,7 @@
 
 #include <GLFW/glfw3.h>
 
+#include <string>
 #include <vector>
 
 class Engine {
@@ -29,26 +30,40 @@ private:
         void create_logical_device(void);
         void create_swapchain(void);
         void create_image_views(void);
+        void create_graphics_pipeline(void);
     void main_loop(void);
     void cleanup(void);
 
     // util functions
+    [[nodiscard]]
+    static vk::raii::ShaderModule    create_shader_module(const vk::raii::Device &dev,
+                                                          const std::vector<char> &shader_code);
+    [[nodiscard]]
     static vk::SurfaceFormatKHR      choose_swapchain_surface_format(const vk::raii::PhysicalDevice &pd,
                                                                      const vk::raii::SurfaceKHR &surface);
+    [[nodiscard]]
     static vk::PresentModeKHR        choose_swapchain_present_mode(const vk::raii::PhysicalDevice &pd,
                                                                    const vk::raii::SurfaceKHR &surface);
+    [[nodiscard]]
     static vk::Extent2D              choose_swapchain_extent(const vk::raii::PhysicalDevice &pd,
                                                              const vk::raii::SurfaceKHR &surface,
                                                              GLFWwindow *window);
+    [[nodiscard]]
     static uint32_t                  get_queue_family_index(const vk::raii::PhysicalDevice &pd,
                                                             const vk::raii::SurfaceKHR &surface);
+    [[nodiscard]]
     static int                       get_physical_device_score(const vk::raii::PhysicalDevice &pd);
+    [[nodiscard]]
     static std::vector<const char *> get_required_device_extensions();
+    [[nodiscard]]
     static std::vector<const char *> get_required_instance_extensions();
+    [[nodiscard]]
     static vk::Bool32                debug_callback(vk::DebugUtilsMessageSeverityFlagBitsEXT severity,
                                                     vk::DebugUtilsMessageTypeFlagsEXT type,
                                                     const vk::DebugUtilsMessengerCallbackDataEXT *callback_data,
                                                     void *);
+    [[nodiscard]]
+    static std::vector<char>         read_file(const std::string &fname);
 
 private:
     GLFWwindow                       *window         = nullptr;

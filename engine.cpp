@@ -5,10 +5,12 @@
 
 #include <algorithm>
 #include <cstring>
+#include <fstream>
 #include <iostream>
 #include <limits>
 #include <map>
 #include <stdexcept>
+#include <string>
 #include <tuple>
 #include <vector>
 
@@ -28,6 +30,7 @@ using namespace std::string_literals;
 
 constexpr uint32_t WIDTH = 800;
 constexpr uint32_t HEIGHT = 600;
+constexpr const char *SHADER_SPV_PATH = "./shader.spv";
 
 const std::vector<const char *> g_validation_layers = {
 #if CONFIG_VALIDATION_LAYERS
@@ -259,6 +262,22 @@ void Engine::create_image_views(void)
     }
 }
 
+void Engine::create_graphics_pipeline(void)
+{
+    vk::raii::ShaderModule shader_module = create_shader_module(this->device, read_file(SHADER_SPV_PATH));
+
+    vk::PipelineShaderStageCreateInfo vert_create_info({},
+                                                       vk::ShaderStageFlagBits::eVertex,
+                                                       shader_module,
+                                                       "vert_main");
+    vk::PipelineShaderStageCreateInfo frag_create_info({},
+                                                       vk::ShaderStageFlagBits::eFragment,
+                                                       shader_module,
+                                                       "frag_main");
+
+    vk::PipelineShaderStageCreateInfo shader_stages[] = { vert_create_info, frag_create_info };
+}
+
 void Engine::main_loop(void)
 {
     while (not glfwWindowShouldClose(this->window)) {
@@ -274,6 +293,16 @@ void Engine::cleanup(void)
 
 // ====================================================================================================================
 // util functions
+
+vk::raii::ShaderModule Engine::create_shader_module(const vk::raii::Device &dev,
+                                                    const std::vector<char> &shader_code)
+{
+    vk::ShaderModuleCreateInfo create_info({},
+                                           shader_code.size() * sizeof(char),
+                                           reinterpret_cast<const uint32_t *>(shader_code.data()));
+
+    return vk::raii::ShaderModule(dev, create_info);
+}
 
 vk::SurfaceFormatKHR Engine::choose_swapchain_surface_format(const vk::raii::PhysicalDevice &pd,
                                                              const vk::raii::SurfaceKHR &surface)
@@ -414,6 +443,23 @@ std::vector<const char *> Engine::get_required_instance_extensions(void)
     }
 
     return extensions;
+}
+
+std::vector<char> Engine::read_file(const std::string &fname)
+{
+    std::ifstream     f(fname, std::ios::ate | std::ios::binary);
+    std::vector<char> buff;
+
+    if (!f.is_open()) {
+        throw std::runtime_error("failed to open file: " + fname);
+    }
+
+    buff.resize(f.tellg());
+    f.seekg(0, std::ios::beg);
+    f.read(buff.data(), buff.size());
+    f.close();
+
+    return buff;
 }
 
 vk::Bool32 Engine::debug_callback(
