@@ -24,18 +24,35 @@ private:
     void init_vulkan(void);
         // init_vulkan functions
         void create_instance(void);
+
         void setup_debug_messanger(void);
+
         void create_surface();
+
         void pick_physical_device(void);
         void create_logical_device(void);
+
         void create_swapchain(void);
         void create_image_views(void);
+
         void create_graphics_pipeline(void);
+
         void create_command_pool(void);
+        void create_command_buffer(void);
+        void record_command_buffer(uint32_t image_index);
+
     void main_loop(void);
+
     void cleanup(void);
 
     // util functions
+    static vk::DependencyInfo        transition_image_layout(const vk::Image &current_frame,
+                                                             vk::ImageLayout old_layout,
+                                                             vk::ImageLayout new_layout,
+                                                             vk::AccessFlags2 scr_access_mask,
+                                                             vk::AccessFlags2 dst_access_mask,
+                                                             vk::PipelineStageFlags2 src_stage_mask,
+                                                             vk::PipelineStageFlags2 dst_stage_mask);
     [[nodiscard]]
     static vk::raii::ShaderModule    create_shader_module(const vk::raii::Device &dev,
                                                           const std::vector<char> &shader_code);
@@ -77,6 +94,7 @@ private:
     vk::raii::PhysicalDevice         physical_device = nullptr;
     vk::raii::Device                 device          = nullptr;
 
+    uint32_t                         queue_index     = -1;
     vk::raii::Queue                  queue           = nullptr;
 
     vk::raii::SwapchainKHR           swapchain       = nullptr;
@@ -90,6 +108,7 @@ private:
     vk::raii::Pipeline               pipeline        = nullptr;
 
     vk::raii::CommandPool            command_pool    = nullptr;
+    vk::raii::CommandBuffer          command_buffer  = nullptr;
 };
 
 #endif /* ENGINE_HPP */

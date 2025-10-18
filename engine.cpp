@@ -1,5 +1,4 @@
 
-#include <cstdint>
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
@@ -67,6 +66,7 @@ void Engine::init_vulkan(void)
     create_image_views();
     create_graphics_pipeline();
     create_command_pool();
+    create_command_buffer();
 }
 
 void Engine::create_instance(void)
@@ -187,7 +187,8 @@ void Engine::create_logical_device(void)
 {
     std::vector<const char *> extensions     = get_required_device_extensions();
     std::vector<float>        priority       = { 1.0f };
-    uint32_t                  queue_index    = get_queue_family_index(this->physical_device, this->surface);
+
+    this->queue_index = get_queue_family_index(this->physical_device, this->surface);
 
     vk::StructureChain<vk::PhysicalDeviceFeatures2,
                        vk::PhysicalDeviceVulkan11Features,
@@ -203,7 +204,7 @@ void Engine::create_logical_device(void)
     };
 
     vk::DeviceQueueCreateInfo queue_create_info({},
-                                                queue_index,
+                                                this->queue_index,
                                                 priority);
 
     std::vector<vk::DeviceQueueCreateInfo> queue_infos = { queue_create_info };
@@ -216,7 +217,7 @@ void Engine::create_logical_device(void)
                                      &feature_chain.get<vk::PhysicalDeviceFeatures2>());
 
     this->device = vk::raii::Device(this->physical_device, create_info);
-    this->queue = vk::raii::Queue(this->device, queue_index, 0);
+    this->queue = vk::raii::Queue(this->device, this->queue_index, 0);
 }
 
 void Engine::create_swapchain(void)
@@ -369,6 +370,94 @@ void Engine::create_graphics_pipeline(void)
 
 void Engine::create_command_pool(void)
 {
+    vk::CommandPoolCreateInfo create_info(vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
+                                          this->queue_index);
+
+    this->command_pool = vk::raii::CommandPool(this->device, create_info);
+}
+
+void Engine::create_command_buffer(void)
+{
+    vk::CommandBufferAllocateInfo allocate_info(this->command_pool,
+                                                vk::CommandBufferLevel::ePrimary,
+                                                1);
+
+    vk::raii::CommandBuffers cb(this->device, allocate_info);
+    this->command_buffer = std::move(cb.front());
+}
+
+void Engine::record_command_buffer(uint32_t image_index)
+{
+    // begin command buffer
+    this->command_buffer.begin({});
+
+    // transition the swapchain image to COLOR_ATTACHMENT_OPTIMAL
+    vk::DependencyInfo to_color_attachment = transition_image_layout(this->swapchain_images.at(image_index),
+                                                                     vk::ImageLayout::eUndefined,
+                                                                     vk::ImageLayout::eColorAttachmentOptimal,
+                                                                     {},
+                                                                     vk::AccessFlagBits2::eColorAttachmentWrite,
+                                                                     vk::PipelineStageFlagBits2::eTopOfPipe,
+                                                                     vk::PipelineStageFlagBits2::eColorAttachmentOutput);
+    this->command_buffer.pipelineBarrier2(to_color_attachment);
+
+    // start dynamic rendering
+    vk::ClearValue clear_color = vk::ClearColorValue(0, 0, 0, 1);
+    vk::RenderingAttachmentInfo attachment_info(this->swapchain_image_views.at(image_index),
+                                                vk::ImageLayout::eColorAttachmentOptimal,
+                                                {},
+                                                {},
+                                                {},
+                                                vk::AttachmentLoadOp::eClear,
+                                                vk::AttachmentStoreOp::eStore,
+                                                clear_color);
+    std::vector<vk::RenderingAttachmentInfo> attachment_infos = { attachment_info };
+
+    vk::Rect2D render_area({ 0, 0 }, this->swapchain_extent);
+    vk::RenderingInfo rendering_info({},
+                                     render_area,
+                                     1,
+                                     {},
+                                     { attachment_info });
+
+    this->command_buffer.beginRendering(rendering_info);
+
+    // bind pipeline
+    this->command_buffer.bindPipeline(vk::PipelineBindPoint::eGraphics,
+                                      this->pipeline);
+
+    // set dynamic states
+    vk::Viewport viewport(0,
+                          0,
+                          this->swapchain_extent.width,
+                          this->swapchain_extent.height,
+                          0,
+                          1);
+    vk::Rect2D scissor(vk::Offset2D(0, 0),
+                       this->swapchain_extent);
+
+    this->command_buffer.setViewport(0, viewport);
+    this->command_buffer.setScissor(0, scissor);
+
+    // draw
+    this->command_buffer.draw(3, 1, 0, 0);
+
+    // end rendering
+    this->command_buffer.endRendering();
+
+    // transition the swapchain image to PRESENT_SRC
+    vk::DependencyInfo to_present_src = transition_image_layout(this->swapchain_images.at(image_index),
+                                                                vk::ImageLayout::eColorAttachmentOptimal,
+                                                                vk::ImageLayout::ePresentSrcKHR,
+                                                                vk::AccessFlagBits2::eColorAttachmentWrite,
+                                                                {},
+                                                                vk::PipelineStageFlagBits2::eColorAttachmentOutput,
+                                                                vk::PipelineStageFlagBits2::eBottomOfPipe);
+    this->command_buffer.pipelineBarrier2(to_present_src);
+
+    // end command buffer
+    this->command_buffer.end();
+
 }
 
 void Engine::main_loop(void)
@@ -386,6 +475,39 @@ void Engine::cleanup(void)
 
 // ====================================================================================================================
 // util functions
+
+vk::DependencyInfo Engine::transition_image_layout(const vk::Image &current_frame,
+                                                   vk::ImageLayout old_layout,
+                                                   vk::ImageLayout new_layout,
+                                                   vk::AccessFlags2 scr_access_mask,
+                                                   vk::AccessFlags2 dst_access_mask,
+                                                   vk::PipelineStageFlags2 src_stage_mask,
+                                                   vk::PipelineStageFlags2 dst_stage_mask)
+{
+    vk::ImageSubresourceRange subresource_range(vk::ImageAspectFlagBits::eColor,
+                                                0,
+                                                1,
+                                                0,
+                                                1);
+
+    vk::ImageMemoryBarrier2 barrier(src_stage_mask,
+                                    scr_access_mask,
+                                    dst_stage_mask,
+                                    dst_access_mask,
+                                    old_layout,
+                                    new_layout,
+                                    VK_QUEUE_FAMILY_IGNORED,
+                                    VK_QUEUE_FAMILY_IGNORED,
+                                    current_frame,
+                                    subresource_range);
+
+    vk::DependencyInfo dependency_info({},
+                                       {},
+                                       {},
+                                       { barrier } );
+
+    return dependency_info;
+}
 
 vk::raii::ShaderModule Engine::create_shader_module(const vk::raii::Device &dev,
                                                     const std::vector<char> &shader_code)
