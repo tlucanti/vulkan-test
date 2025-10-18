@@ -166,7 +166,6 @@ void Engine::pick_physical_device(void)
     }
 
     for (const vk::raii::PhysicalDevice &pd : devices) {
-        vk::PhysicalDeviceProperties props = pd.getProperties();
         candidates.insert({get_physical_device_score(pd), pd});
     }
 
@@ -266,6 +265,7 @@ void Engine::create_graphics_pipeline(void)
 {
     vk::raii::ShaderModule shader_module = create_shader_module(this->device, read_file(SHADER_SPV_PATH));
 
+    // shader stages
     vk::PipelineShaderStageCreateInfo vert_create_info({},
                                                        vk::ShaderStageFlagBits::eVertex,
                                                        shader_module,
@@ -274,8 +274,89 @@ void Engine::create_graphics_pipeline(void)
                                                        vk::ShaderStageFlagBits::eFragment,
                                                        shader_module,
                                                        "frag_main");
-
     vk::PipelineShaderStageCreateInfo shader_stages[] = { vert_create_info, frag_create_info };
+
+    // vertex input state
+    vk::PipelineVertexInputStateCreateInfo vertex_input;
+
+    // input assembly state
+    vk::PipelineInputAssemblyStateCreateInfo assembler({},
+                                                       vk::PrimitiveTopology::eTriangleList);
+
+    // viewport state
+    vk::PipelineViewportStateCreateInfo viewport({}, 1, {}, 1);
+
+    // rasterization state
+    vk::PipelineRasterizationStateCreateInfo rasterizer({},
+                                                        vk::False,
+                                                        vk::False,
+                                                        vk::PolygonMode::eFill,
+                                                        vk::CullModeFlagBits::eBack,
+                                                        vk::FrontFace::eClockwise,
+                                                        vk::False,
+                                                        0,
+                                                        0,
+                                                        0,
+                                                        1);
+
+    // multisampling state
+    vk::PipelineMultisampleStateCreateInfo multisampler({},
+                                                        vk::SampleCountFlagBits::e1,
+                                                        vk::False);
+
+    // depth-stencil state
+    // (skipped)
+
+    // color blending state
+    vk::PipelineColorBlendAttachmentState color_blend_attachment(vk::False);
+    color_blend_attachment.setColorWriteMask(vk::ColorComponentFlagBits::eR |
+                                             vk::ColorComponentFlagBits::eG |
+                                             vk::ColorComponentFlagBits::eB |
+                                             vk::ColorComponentFlagBits::eA);
+
+    std::vector<vk::PipelineColorBlendAttachmentState> color_blend_attachments = { color_blend_attachment };
+
+    vk::PipelineColorBlendStateCreateInfo color_blender({},
+                                                        vk::False,
+                                                        vk::LogicOp::eCopy,
+                                                        color_blend_attachments);
+
+    // dynamic states
+    std::vector<vk::DynamicState> dynamic;
+    if (CONFIG_RESIZABLE) {
+        dynamic = {
+            vk::DynamicState::eViewport,
+            vk::DynamicState::eScissor,
+        };
+    }
+    vk::PipelineDynamicStateCreateInfo dynamic_states({}, dynamic);
+
+    // pipeline layout
+    vk::PipelineLayoutCreateInfo pipeline_layout_create_info;
+    this->pipeline_layout = vk::raii::PipelineLayout(this->device, pipeline_layout_create_info);
+
+    // pipeline rendering
+    std::vector<vk::Format> color_attachment_formats = { swapchain_surface_foramt.format };
+    vk::PipelineRenderingCreateInfo pipeline_rendering({},
+                                                       color_attachment_formats);
+
+    // graphics pipeline
+    vk::GraphicsPipelineCreateInfo pipeline_create_info({},
+                                                        shader_stages,
+                                                        &vertex_input,
+                                                        &assembler,
+                                                        {},
+                                                        &viewport,
+                                                        &rasterizer,
+                                                        &multisampler,
+                                                        {},
+                                                        &color_blender,
+                                                        &dynamic_states,
+                                                        this->pipeline_layout,
+                                                        {});
+    pipeline_create_info.setPNext(&pipeline_rendering);
+
+    this->pipeline = vk::raii::Pipeline(this->device, nullptr, pipeline_create_info);
 }
 
 void Engine::main_loop(void)
@@ -467,6 +548,8 @@ vk::Bool32 Engine::debug_callback(
     vk::DebugUtilsMessageTypeFlagsEXT type,
     const vk::DebugUtilsMessengerCallbackDataEXT *callback_data, void *)
 {
+    (void)type;
+
     if (severity >= vk::DebugUtilsMessageSeverityFlagBitsEXT::eInfo) {
         std::cerr << "validation layer" << " msg: " << callback_data->pMessage << std::endl;
     }
