@@ -64,6 +64,9 @@ void Engine::init_vulkan(void)
     pick_physical_device();
     create_logical_device();
     create_swapchain();
+    create_image_views();
+    create_graphics_pipeline();
+    create_command_pool();
 }
 
 void Engine::create_instance(void)
@@ -187,11 +190,16 @@ void Engine::create_logical_device(void)
     uint32_t                  queue_index    = get_queue_family_index(this->physical_device, this->surface);
 
     vk::StructureChain<vk::PhysicalDeviceFeatures2,
+                       vk::PhysicalDeviceVulkan11Features,
                        vk::PhysicalDeviceVulkan13Features,
                        vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT> feature_chain = {
         vk::PhysicalDeviceFeatures2(),
-        vk::PhysicalDeviceVulkan13Features().setDynamicRendering(true),
-        vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT().setExtendedDynamicState(true),
+        vk::PhysicalDeviceVulkan11Features()
+            .setShaderDrawParameters(true),
+        vk::PhysicalDeviceVulkan13Features()
+            .setDynamicRendering(true),
+        vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT()
+            .setExtendedDynamicState(true),
     };
 
     vk::DeviceQueueCreateInfo queue_create_info({},
@@ -357,6 +365,10 @@ void Engine::create_graphics_pipeline(void)
     pipeline_create_info.setPNext(&pipeline_rendering);
 
     this->pipeline = vk::raii::Pipeline(this->device, nullptr, pipeline_create_info);
+}
+
+void Engine::create_command_pool(void)
+{
 }
 
 void Engine::main_loop(void)

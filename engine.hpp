@@ -31,6 +31,7 @@ private:
         void create_swapchain(void);
         void create_image_views(void);
         void create_graphics_pipeline(void);
+        void create_command_pool(void);
     void main_loop(void);
     void cleanup(void);
 
@@ -88,6 +89,7 @@ private:
     vk::raii::PipelineLayout         pipeline_layout = nullptr;
     vk::raii::Pipeline               pipeline        = nullptr;
 
+    vk::raii::CommandPool            command_pool    = nullptr;
 };
 
 #endif /* ENGINE_HPP */
