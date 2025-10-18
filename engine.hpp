@@ -78,12 +78,15 @@ private:
 
     vk::raii::Queue                  queue           = nullptr;
 
-    vk::raii::SwapchainKHR           swapchain        = nullptr;
+    vk::raii::SwapchainKHR           swapchain       = nullptr;
     vk::SurfaceFormatKHR             swapchain_surface_foramt;
     vk::Extent2D                     swapchain_extent;
 
     std::vector<vk::Image>           swapchain_images;
     std::vector<vk::raii::ImageView> swapchain_image_views;
+
+    vk::raii::PipelineLayout         pipeline_layout = nullptr;
+    vk::raii::Pipeline               pipeline        = nullptr;
 
 };
 

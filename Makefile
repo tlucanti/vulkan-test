@@ -7,9 +7,15 @@ CXXFLAGS  = \
 	-O0 -g3 \
 	-std=c++23 \
 	-I $(VK_SDK)/x86_64/include/ \
+	\
+	-Wall \
+	-Wextra \
+	-Werror \
 	-Wno-eager-load-cxx-named-modules \
+	\
 	-D CONFIG_VALIDATION_LAYERS=1 \
-	-D CONFIG_VERBOSE=1
+	-D CONFIG_VERBOSE=1 \
+	-D CONFIG_RESIZABLE=1
 
 NAME	= main.elf
 
