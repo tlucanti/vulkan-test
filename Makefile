@@ -19,7 +19,7 @@ CXXFLAGS  = \
 
 NAME	= main.elf
 
-$(NAME): Makefile vulkan.pcm main.cpp engine.cpp engine.hpp slang.spv
+$(NAME): Makefile vulkan.pcm main.cpp engine.cpp engine.hpp shader.spv
 	$(CXX) \
 		$(CXXFLAGS) \
 		-fmodule-file=vulkan.pcm \
@@ -34,18 +34,15 @@ vulkan.pcm: Makefile
 		-o vulkan.pcm \
 		$(VK_SDK)/x86_64/include/vulkan/vulkan.cppm
 
-slang.spv: Makefile shader.slang
+shader.spv: Makefile shader.slang
 	slangc \
-		-target spirv \
+		shader.slang \
 		-profile spirv_1_4 \
 		-emit-spirv-directly \
 		-fvk-use-entrypoint-name \
+		-separate-debug-info \
 		\
-		-entry vert_main \
-		-entry frag_main \
-		\
-		-o slang.spv \
-		shader.slang
+		-o shader.spv
 
 clean:
 	rm -f $(NAME) vulkan.pcm
