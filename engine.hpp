@@ -41,7 +41,9 @@ private:
         void create_command_buffer(void);
         void record_command_buffer(uint32_t image_index);
 
+    // main loop functions
     void main_loop(void);
+        void draw_frame(void);
 
     void cleanup(void);
 
