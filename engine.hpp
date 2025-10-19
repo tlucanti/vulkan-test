@@ -40,6 +40,7 @@ private:
         void create_command_pool(void);
         void create_command_buffer(void);
         void record_command_buffer(uint32_t image_index);
+        void create_sync_objects(void);
 
     // main loop functions
     void main_loop(void);
@@ -48,13 +49,14 @@ private:
     void cleanup(void);
 
     // util functions
-    static vk::DependencyInfo        transition_image_layout(const vk::Image &current_frame,
-                                                             vk::ImageLayout old_layout,
-                                                             vk::ImageLayout new_layout,
-                                                             vk::AccessFlags2 scr_access_mask,
-                                                             vk::AccessFlags2 dst_access_mask,
-                                                             vk::PipelineStageFlags2 src_stage_mask,
-                                                             vk::PipelineStageFlags2 dst_stage_mask);
+    static void        transition_image_layout(vk::raii::CommandBuffer &cb,
+                                               const vk::Image &current_frame,
+                                               vk::ImageLayout old_layout,
+                                               vk::ImageLayout new_layout,
+                                               vk::AccessFlags2 scr_access_mask,
+                                               vk::AccessFlags2 dst_access_mask,
+                                               vk::PipelineStageFlags2 src_stage_mask,
+                                               vk::PipelineStageFlags2 dst_stage_mask);
     [[nodiscard]]
     static vk::raii::ShaderModule    create_shader_module(const vk::raii::Device &dev,
                                                           const std::vector<char> &shader_code);
@@ -111,6 +113,10 @@ private:
 
     vk::raii::CommandPool            command_pool    = nullptr;
     vk::raii::CommandBuffer          command_buffer  = nullptr;
+
+    vk::raii::Semaphore              present_complete= nullptr;
+    vk::raii::Semaphore              render_finished = nullptr;
+    vk::raii::Fence                  frame_finished  = nullptr;
 };
 
 #endif /* ENGINE_HPP */
