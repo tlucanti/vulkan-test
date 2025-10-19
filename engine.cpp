@@ -52,7 +52,13 @@ void Engine::init_window(void)
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
-    this->window = glfwCreateWindow(WIDTH, HEIGHT, "vulkan", nullptr, nullptr);
+    this->window = glfwCreateWindow(
+        WIDTH,
+        HEIGHT,
+        "vulkan",
+        nullptr,
+        nullptr
+    );
 }
 
 void Engine::init_vulkan(void)
@@ -67,6 +73,7 @@ void Engine::init_vulkan(void)
     create_graphics_pipeline();
     create_command_pool();
     create_command_buffer();
+
 }
 
 void Engine::create_instance(void)
@@ -102,16 +109,19 @@ void Engine::create_instance(void)
         }
     }
 
-    const vk::ApplicationInfo app_info("vulkan",
-                                       vk::makeVersion(1, 0, 0),
-                                       "No engine",
-                                       vk::makeVersion(1, 0, 0),
-                                       vk::ApiVersion14);
-
-    vk::InstanceCreateInfo create_info({},
-                                       &app_info,
-                                       g_validation_layers,
-                                       req_extensions);
+    const vk::ApplicationInfo app_info(
+        "vulkan",
+        vk::makeVersion(1, 0, 0),
+        "No engine",
+        vk::makeVersion(1, 0, 0),
+        vk::ApiVersion14
+    );
+    vk::InstanceCreateInfo create_info(
+        {},
+        &app_info,
+        g_validation_layers,
+        req_extensions
+    );
 
     this->instance = vk::raii::Instance(this->context, create_info);
 }
@@ -122,18 +132,23 @@ void Engine::setup_debug_messanger(void)
         return;
     }
 
-    vk::DebugUtilsMessageSeverityFlagsEXT severity_flags(vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose |
-                                                         vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning |
-                                                         vk::DebugUtilsMessageSeverityFlagBitsEXT::eError);
+    vk::DebugUtilsMessageSeverityFlagsEXT severity_flags(
+        vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose |
+        vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning |
+        vk::DebugUtilsMessageSeverityFlagBitsEXT::eError
+    );
+    vk::DebugUtilsMessageTypeFlagsEXT message_type_flags(
+        vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral |
+        vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance |
+        vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation
+    );
 
-    vk::DebugUtilsMessageTypeFlagsEXT message_type_flags(vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral |
-                                                         vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance |
-                                                         vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation);
-
-    vk::DebugUtilsMessengerCreateInfoEXT create_info({},
-                                                     severity_flags,
-                                                     message_type_flags,
-                                                     &debug_callback);
+    vk::DebugUtilsMessengerCreateInfoEXT create_info(
+        {},
+        severity_flags,
+        message_type_flags,
+        &debug_callback
+    );
 
     this->debug_messenger = this->instance.createDebugUtilsMessengerEXT(create_info);
 }
@@ -142,7 +157,10 @@ void Engine::create_surface(void)
 {
     VkSurfaceKHR csurface;
 
-    if (glfwCreateWindowSurface(*this->instance, this->window, nullptr, &csurface)) {
+    if (glfwCreateWindowSurface(*this->instance,
+                                this->window,
+                                nullptr,
+                                &csurface)) {
         throw std::runtime_error("faied to create window surface");
     }
 
@@ -203,18 +221,19 @@ void Engine::create_logical_device(void)
             .setExtendedDynamicState(true),
     };
 
-    vk::DeviceQueueCreateInfo queue_create_info({},
-                                                this->queue_index,
-                                                priority);
-
-    std::vector<vk::DeviceQueueCreateInfo> queue_infos = { queue_create_info };
-
-    vk::DeviceCreateInfo create_info({},
-                                     queue_infos,
-                                     {},
-                                     extensions,
-                                     {},
-                                     &feature_chain.get<vk::PhysicalDeviceFeatures2>());
+    vk::DeviceQueueCreateInfo queue_create_info(
+        {},
+        this->queue_index,
+        priority
+    );
+    vk::DeviceCreateInfo create_info(
+        {},
+        { queue_create_info },
+        {},
+        extensions,
+        {},
+        &feature_chain.get<vk::PhysicalDeviceFeatures2>()
+    );
 
     this->device = vk::raii::Device(this->physical_device, create_info);
     this->queue = vk::raii::Queue(this->device, this->queue_index, 0);
@@ -222,10 +241,10 @@ void Engine::create_logical_device(void)
 
 void Engine::create_swapchain(void)
 {
-    vk::SurfaceCapabilitiesKHR        surface_capabilities   = this->physical_device.getSurfaceCapabilitiesKHR(this->surface);
-    vk::PresentModeKHR                swapchain_present_mode = choose_swapchain_present_mode(this->physical_device, this->surface);
-    uint32_t                          image_count;
+    vk::SurfaceCapabilitiesKHR surface_capabilities;
+    uint32_t                   image_count;
 
+    surface_capabilities = this->physical_device.getSurfaceCapabilitiesKHR(this->surface);
     this->swapchain_surface_foramt = choose_swapchain_surface_format(this->physical_device, this->surface);
     this->swapchain_extent = choose_swapchain_extent(this->physical_device, this->surface, this->window);
 
@@ -234,21 +253,22 @@ void Engine::create_swapchain(void)
         image_count = std::min(image_count, surface_capabilities.maxImageCount);
     }
 
-    vk::SwapchainCreateInfoKHR create_info({},
-                                           surface,
-                                           image_count,
-                                           this->swapchain_surface_foramt.format,
-                                           this->swapchain_surface_foramt.colorSpace,
-                                           this->swapchain_extent,
-                                           1,
-                                           vk::ImageUsageFlagBits::eColorAttachment,
-                                           vk::SharingMode::eExclusive,
-                                           {},
-                                           surface_capabilities.currentTransform,
-                                           vk::CompositeAlphaFlagBitsKHR::eOpaque,
-                                           swapchain_present_mode,
-                                           true);
-
+    vk::SwapchainCreateInfoKHR create_info(
+        {},
+        surface,
+        image_count,
+        this->swapchain_surface_foramt.format,
+        this->swapchain_surface_foramt.colorSpace,
+        this->swapchain_extent,
+        1,
+        vk::ImageUsageFlagBits::eColorAttachment,
+        vk::SharingMode::eExclusive,
+        {},
+        surface_capabilities.currentTransform,
+        vk::CompositeAlphaFlagBitsKHR::eOpaque,
+        choose_swapchain_present_mode(this->physical_device, this->surface),
+        true
+    );
 
     this->swapchain = vk::raii::SwapchainKHR(device, create_info);
     this->swapchain_images = this->swapchain.getImages();
@@ -256,13 +276,20 @@ void Engine::create_swapchain(void)
 
 void Engine::create_image_views(void)
 {
-    vk::ImageSubresourceRange sr(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1);
-    vk::ImageViewCreateInfo create_info({},
-                                        {},
-                                        vk::ImageViewType::e2D,
-                                        this->swapchain_surface_foramt.format,
-                                        {},
-                                        sr);
+    vk::ImageViewCreateInfo create_info(
+        {},
+        {},
+        vk::ImageViewType::e2D,
+        this->swapchain_surface_foramt.format,
+        {},
+        vk::ImageSubresourceRange(
+            vk::ImageAspectFlagBits::eColor,
+            0,
+            1,
+            0,
+            1
+        )
+    );
 
     for (const vk::Image &image: this->swapchain_images) {
         create_info.image = image;
@@ -275,60 +302,80 @@ void Engine::create_graphics_pipeline(void)
     vk::raii::ShaderModule shader_module = create_shader_module(this->device, read_file(SHADER_SPV_PATH));
 
     // shader stages
-    vk::PipelineShaderStageCreateInfo vert_create_info({},
-                                                       vk::ShaderStageFlagBits::eVertex,
-                                                       shader_module,
-                                                       "vert_main");
-    vk::PipelineShaderStageCreateInfo frag_create_info({},
-                                                       vk::ShaderStageFlagBits::eFragment,
-                                                       shader_module,
-                                                       "frag_main");
-    vk::PipelineShaderStageCreateInfo shader_stages[] = { vert_create_info, frag_create_info };
+    vk::PipelineShaderStageCreateInfo vert_create_info(
+        {},
+        vk::ShaderStageFlagBits::eVertex,
+        shader_module,
+        "vert_main"
+    );
+    vk::PipelineShaderStageCreateInfo frag_create_info(
+        {},
+        vk::ShaderStageFlagBits::eFragment,
+        shader_module,
+        "frag_main"
+    );
+    vk::PipelineShaderStageCreateInfo shader_stages[] = {
+        vert_create_info,
+        frag_create_info
+    };
 
     // vertex input state
     vk::PipelineVertexInputStateCreateInfo vertex_input;
 
     // input assembly state
-    vk::PipelineInputAssemblyStateCreateInfo assembler({},
-                                                       vk::PrimitiveTopology::eTriangleList);
+    vk::PipelineInputAssemblyStateCreateInfo assembler(
+        {},
+        vk::PrimitiveTopology::eTriangleList
+    );
 
     // viewport state
-    vk::PipelineViewportStateCreateInfo viewport({}, 1, {}, 1);
+    vk::PipelineViewportStateCreateInfo viewport(
+        {},
+        1,
+        {},
+        1
+    );
 
     // rasterization state
-    vk::PipelineRasterizationStateCreateInfo rasterizer({},
-                                                        vk::False,
-                                                        vk::False,
-                                                        vk::PolygonMode::eFill,
-                                                        vk::CullModeFlagBits::eBack,
-                                                        vk::FrontFace::eClockwise,
-                                                        vk::False,
-                                                        0,
-                                                        0,
-                                                        0,
-                                                        1);
+    vk::PipelineRasterizationStateCreateInfo rasterizer(
+        {},
+        vk::False,
+        vk::False,
+        vk::PolygonMode::eFill,
+        vk::CullModeFlagBits::eBack,
+        vk::FrontFace::eClockwise,
+        vk::False,
+        0,
+        0,
+        0,
+        1
+    );
 
     // multisampling state
-    vk::PipelineMultisampleStateCreateInfo multisampler({},
-                                                        vk::SampleCountFlagBits::e1,
-                                                        vk::False);
+    vk::PipelineMultisampleStateCreateInfo multisampler(
+        {},
+        vk::SampleCountFlagBits::e1,
+        vk::False
+    );
 
     // depth-stencil state
     // (skipped)
 
     // color blending state
-    vk::PipelineColorBlendAttachmentState color_blend_attachment(vk::False);
-    color_blend_attachment.setColorWriteMask(vk::ColorComponentFlagBits::eR |
-                                             vk::ColorComponentFlagBits::eG |
-                                             vk::ColorComponentFlagBits::eB |
-                                             vk::ColorComponentFlagBits::eA);
-
-    std::vector<vk::PipelineColorBlendAttachmentState> color_blend_attachments = { color_blend_attachment };
-
-    vk::PipelineColorBlendStateCreateInfo color_blender({},
-                                                        vk::False,
-                                                        vk::LogicOp::eCopy,
-                                                        color_blend_attachments);
+    auto color_blend_attachment =
+        vk::PipelineColorBlendAttachmentState (vk::False)
+        .setColorWriteMask(
+            vk::ColorComponentFlagBits::eR |
+            vk::ColorComponentFlagBits::eG |
+            vk::ColorComponentFlagBits::eB |
+            vk::ColorComponentFlagBits::eA
+        );
+    vk::PipelineColorBlendStateCreateInfo color_blender(
+        {},
+        vk::False,
+        vk::LogicOp::eCopy,
+        { color_blend_attachment }
+    );
 
     // dynamic states
     std::vector<vk::DynamicState> dynamic;
@@ -338,52 +385,66 @@ void Engine::create_graphics_pipeline(void)
             vk::DynamicState::eScissor,
         };
     }
-    vk::PipelineDynamicStateCreateInfo dynamic_states({}, dynamic);
+    vk::PipelineDynamicStateCreateInfo dynamic_states(
+        {},
+        dynamic
+    );
 
     // pipeline layout
     vk::PipelineLayoutCreateInfo pipeline_layout_create_info;
     this->pipeline_layout = vk::raii::PipelineLayout(this->device, pipeline_layout_create_info);
 
     // pipeline rendering
-    std::vector<vk::Format> color_attachment_formats = { swapchain_surface_foramt.format };
-    vk::PipelineRenderingCreateInfo pipeline_rendering({},
-                                                       color_attachment_formats);
+    vk::PipelineRenderingCreateInfo pipeline_rendering(
+        {},
+        { swapchain_surface_foramt.format }
+    );
 
     // graphics pipeline
-    vk::GraphicsPipelineCreateInfo pipeline_create_info({},
-                                                        shader_stages,
-                                                        &vertex_input,
-                                                        &assembler,
-                                                        {},
-                                                        &viewport,
-                                                        &rasterizer,
-                                                        &multisampler,
-                                                        {},
-                                                        &color_blender,
-                                                        &dynamic_states,
-                                                        this->pipeline_layout,
-                                                        {});
-    pipeline_create_info.setPNext(&pipeline_rendering);
+    vk::GraphicsPipelineCreateInfo pipeline_create_info(
+        {},
+        shader_stages,
+        &vertex_input,
+        &assembler,
+        {},
+        &viewport,
+        &rasterizer,
+        &multisampler,
+        {},
+        &color_blender,
+        &dynamic_states,
+        this->pipeline_layout,
+        {},
+        {},
+        {},
+        {},
+        &pipeline_rendering
+    );
 
     this->pipeline = vk::raii::Pipeline(this->device, nullptr, pipeline_create_info);
 }
 
 void Engine::create_command_pool(void)
 {
-    vk::CommandPoolCreateInfo create_info(vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
-                                          this->queue_index);
+    vk::CommandPoolCreateInfo create_info(
+        vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
+        this->queue_index
+    );
 
     this->command_pool = vk::raii::CommandPool(this->device, create_info);
 }
 
 void Engine::create_command_buffer(void)
 {
-    vk::CommandBufferAllocateInfo allocate_info(this->command_pool,
-                                                vk::CommandBufferLevel::ePrimary,
-                                                1);
+    vk::CommandBufferAllocateInfo allocate_info(
+        this->command_pool,
+        vk::CommandBufferLevel::ePrimary,
+        1
+    );
 
-    vk::raii::CommandBuffers cb(this->device, allocate_info);
-    this->command_buffer = std::move(cb.front());
+    this->command_buffer = std::move(
+        vk::raii::CommandBuffers(this->device, allocate_info).front()
+    );
 }
 
 void Engine::record_command_buffer(uint32_t image_index)
@@ -392,52 +453,56 @@ void Engine::record_command_buffer(uint32_t image_index)
     this->command_buffer.begin({});
 
     // transition the swapchain image to COLOR_ATTACHMENT_OPTIMAL
-    vk::DependencyInfo to_color_attachment = transition_image_layout(this->swapchain_images.at(image_index),
-                                                                     vk::ImageLayout::eUndefined,
-                                                                     vk::ImageLayout::eColorAttachmentOptimal,
-                                                                     {},
-                                                                     vk::AccessFlagBits2::eColorAttachmentWrite,
-                                                                     vk::PipelineStageFlagBits2::eTopOfPipe,
-                                                                     vk::PipelineStageFlagBits2::eColorAttachmentOutput);
+    vk::DependencyInfo to_color_attachment = transition_image_layout(
+        this->swapchain_images.at(image_index),
+        vk::ImageLayout::eUndefined,
+        vk::ImageLayout::eColorAttachmentOptimal,
+        {},
+        vk::AccessFlagBits2::eColorAttachmentWrite,
+        vk::PipelineStageFlagBits2::eTopOfPipe,
+        vk::PipelineStageFlagBits2::eColorAttachmentOutput
+    );
     this->command_buffer.pipelineBarrier2(to_color_attachment);
 
     // start dynamic rendering
-    vk::ClearValue clear_color = vk::ClearColorValue(0, 0, 0, 1);
-    vk::RenderingAttachmentInfo attachment_info(this->swapchain_image_views.at(image_index),
-                                                vk::ImageLayout::eColorAttachmentOptimal,
-                                                {},
-                                                {},
-                                                {},
-                                                vk::AttachmentLoadOp::eClear,
-                                                vk::AttachmentStoreOp::eStore,
-                                                clear_color);
-    std::vector<vk::RenderingAttachmentInfo> attachment_infos = { attachment_info };
-
-    vk::Rect2D render_area({ 0, 0 }, this->swapchain_extent);
-    vk::RenderingInfo rendering_info({},
-                                     render_area,
-                                     1,
-                                     {},
-                                     { attachment_info });
-
+    vk::RenderingAttachmentInfo attachment_info(
+        this->swapchain_image_views.at(image_index),
+        vk::ImageLayout::eColorAttachmentOptimal,
+        {},
+        {},
+        {},
+        vk::AttachmentLoadOp::eClear,
+        vk::AttachmentStoreOp::eStore,
+        vk::ClearColorValue(0, 0, 0, 1)
+    );
+    vk::RenderingInfo rendering_info(
+        {},
+        vk::Rect2D({ 0, 0 }, this->swapchain_extent),
+        1,
+        {},
+        { attachment_info }
+    );
     this->command_buffer.beginRendering(rendering_info);
 
     // bind pipeline
-    this->command_buffer.bindPipeline(vk::PipelineBindPoint::eGraphics,
-                                      this->pipeline);
+    this->command_buffer.bindPipeline(vk::PipelineBindPoint::eGraphics, this->pipeline);
 
     // set dynamic states
-    vk::Viewport viewport(0,
-                          0,
-                          this->swapchain_extent.width,
-                          this->swapchain_extent.height,
-                          0,
-                          1);
-    vk::Rect2D scissor(vk::Offset2D(0, 0),
-                       this->swapchain_extent);
-
-    this->command_buffer.setViewport(0, viewport);
-    this->command_buffer.setScissor(0, scissor);
+    this->command_buffer.setViewport(
+        0,
+        vk::Viewport(
+            0,
+            0,
+            this->swapchain_extent.width,
+            this->swapchain_extent.height,
+            0,
+            1
+        )
+    );
+    this->command_buffer.setScissor(
+        0,
+        vk::Rect2D(vk::Offset2D(0, 0), this->swapchain_extent)
+    );
 
     // draw
     this->command_buffer.draw(3, 1, 0, 0);
@@ -446,25 +511,31 @@ void Engine::record_command_buffer(uint32_t image_index)
     this->command_buffer.endRendering();
 
     // transition the swapchain image to PRESENT_SRC
-    vk::DependencyInfo to_present_src = transition_image_layout(this->swapchain_images.at(image_index),
-                                                                vk::ImageLayout::eColorAttachmentOptimal,
-                                                                vk::ImageLayout::ePresentSrcKHR,
-                                                                vk::AccessFlagBits2::eColorAttachmentWrite,
-                                                                {},
-                                                                vk::PipelineStageFlagBits2::eColorAttachmentOutput,
-                                                                vk::PipelineStageFlagBits2::eBottomOfPipe);
+    vk::DependencyInfo to_present_src = transition_image_layout(
+        this->swapchain_images.at(image_index),
+        vk::ImageLayout::eColorAttachmentOptimal,
+        vk::ImageLayout::ePresentSrcKHR,
+        vk::AccessFlagBits2::eColorAttachmentWrite,
+        {},
+        vk::PipelineStageFlagBits2::eColorAttachmentOutput,
+        vk::PipelineStageFlagBits2::eBottomOfPipe
+    );
     this->command_buffer.pipelineBarrier2(to_present_src);
 
     // end command buffer
     this->command_buffer.end();
-
 }
 
 void Engine::main_loop(void)
 {
     while (not glfwWindowShouldClose(this->window)) {
         glfwPollEvents();
+        draw_frame();
     }
+}
+
+void Engine::draw_frame(void)
+{
 }
 
 void Engine::cleanup(void)
@@ -484,27 +555,31 @@ vk::DependencyInfo Engine::transition_image_layout(const vk::Image &current_fram
                                                    vk::PipelineStageFlags2 src_stage_mask,
                                                    vk::PipelineStageFlags2 dst_stage_mask)
 {
-    vk::ImageSubresourceRange subresource_range(vk::ImageAspectFlagBits::eColor,
-                                                0,
-                                                1,
-                                                0,
-                                                1);
-
-    vk::ImageMemoryBarrier2 barrier(src_stage_mask,
-                                    scr_access_mask,
-                                    dst_stage_mask,
-                                    dst_access_mask,
-                                    old_layout,
-                                    new_layout,
-                                    VK_QUEUE_FAMILY_IGNORED,
-                                    VK_QUEUE_FAMILY_IGNORED,
-                                    current_frame,
-                                    subresource_range);
-
-    vk::DependencyInfo dependency_info({},
-                                       {},
-                                       {},
-                                       { barrier } );
+    vk::ImageSubresourceRange subresource_range(
+        vk::ImageAspectFlagBits::eColor,
+        0,
+        1,
+        0,
+        1
+    );
+    vk::ImageMemoryBarrier2 barrier(
+        src_stage_mask,
+        scr_access_mask,
+        dst_stage_mask,
+        dst_access_mask,
+        old_layout,
+        new_layout,
+        VK_QUEUE_FAMILY_IGNORED,
+        VK_QUEUE_FAMILY_IGNORED,
+        current_frame,
+        subresource_range
+    );
+    vk::DependencyInfo dependency_info(
+        {},
+        {},
+        {},
+        { barrier }
+    );
 
     return dependency_info;
 }
@@ -512,9 +587,11 @@ vk::DependencyInfo Engine::transition_image_layout(const vk::Image &current_fram
 vk::raii::ShaderModule Engine::create_shader_module(const vk::raii::Device &dev,
                                                     const std::vector<char> &shader_code)
 {
-    vk::ShaderModuleCreateInfo create_info({},
-                                           shader_code.size() * sizeof(char),
-                                           reinterpret_cast<const uint32_t *>(shader_code.data()));
+    vk::ShaderModuleCreateInfo create_info(
+        {},
+        shader_code.size() * sizeof(char),
+        reinterpret_cast<const uint32_t *>(shader_code.data())
+    );
 
     return vk::raii::ShaderModule(dev, create_info);
 }
@@ -543,7 +620,7 @@ vk::SurfaceFormatKHR Engine::choose_swapchain_surface_format(const vk::raii::Phy
 vk::PresentModeKHR Engine::choose_swapchain_present_mode(const vk::raii::PhysicalDevice &pd,
                                                          const vk::raii::SurfaceKHR &surface)
 {
-    std::vector<vk::PresentModeKHR>   avaliable_present_modes = pd.getSurfacePresentModesKHR(surface);
+    std::vector<vk::PresentModeKHR> avaliable_present_modes = pd.getSurfacePresentModesKHR(surface);
 
     // try to use mailbox present mode if supported
     if (std::ranges::contains(avaliable_present_modes, vk::PresentModeKHR::eMailbox)) {
@@ -578,8 +655,8 @@ vk::Extent2D Engine::choose_swapchain_extent(const vk::raii::PhysicalDevice &pd,
 uint32_t Engine::get_queue_family_index(const vk::raii::PhysicalDevice &pd,
                                         const vk::raii::SurfaceKHR &surface)
 {
-    std::vector<vk::QueueFamilyProperties> props        = pd.getQueueFamilyProperties();
-    uint32_t                               idx          = 0;
+    std::vector<vk::QueueFamilyProperties> props = pd.getQueueFamilyProperties();
+    uint32_t                               idx   = 0;
 
     for (const vk::QueueFamilyProperties &qfp : props) {
         // try to get single queue with both drawing and presentation support
