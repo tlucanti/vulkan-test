@@ -73,7 +73,7 @@ void Engine::init_vulkan(void)
     create_graphics_pipeline();
     create_command_pool();
     create_command_buffer();
-
+    create_sync_objects();
 }
 
 void Engine::create_instance(void)
@@ -216,6 +216,7 @@ void Engine::create_logical_device(void)
         vk::PhysicalDeviceVulkan11Features()
             .setShaderDrawParameters(true),
         vk::PhysicalDeviceVulkan13Features()
+            .setSynchronization2(true)
             .setDynamicRendering(true),
         vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT()
             .setExtendedDynamicState(true),
@@ -453,7 +454,8 @@ void Engine::record_command_buffer(uint32_t image_index)
     this->command_buffer.begin({});
 
     // transition the swapchain image to COLOR_ATTACHMENT_OPTIMAL
-    vk::DependencyInfo to_color_attachment = transition_image_layout(
+    transition_image_layout(
+        this->command_buffer,
         this->swapchain_images.at(image_index),
         vk::ImageLayout::eUndefined,
         vk::ImageLayout::eColorAttachmentOptimal,
@@ -462,7 +464,6 @@ void Engine::record_command_buffer(uint32_t image_index)
         vk::PipelineStageFlagBits2::eTopOfPipe,
         vk::PipelineStageFlagBits2::eColorAttachmentOutput
     );
-    this->command_buffer.pipelineBarrier2(to_color_attachment);
 
     // start dynamic rendering
     vk::RenderingAttachmentInfo attachment_info(
@@ -511,7 +512,8 @@ void Engine::record_command_buffer(uint32_t image_index)
     this->command_buffer.endRendering();
 
     // transition the swapchain image to PRESENT_SRC
-    vk::DependencyInfo to_present_src = transition_image_layout(
+    transition_image_layout(
+        this->command_buffer,
         this->swapchain_images.at(image_index),
         vk::ImageLayout::eColorAttachmentOptimal,
         vk::ImageLayout::ePresentSrcKHR,
@@ -520,10 +522,19 @@ void Engine::record_command_buffer(uint32_t image_index)
         vk::PipelineStageFlagBits2::eColorAttachmentOutput,
         vk::PipelineStageFlagBits2::eBottomOfPipe
     );
-    this->command_buffer.pipelineBarrier2(to_present_src);
 
     // end command buffer
     this->command_buffer.end();
+}
+
+void Engine::create_sync_objects(void)
+{
+    this->present_complete = vk::raii::Semaphore(this->device, vk::SemaphoreCreateInfo());
+    this->render_finished = vk::raii::Semaphore(this->device, vk::SemaphoreCreateInfo());
+    this->frame_finished = vk::raii::Fence(this->device, vk::FenceCreateInfo());
+    //    this->device,
+    //    vk::FenceCreateInfo(vk::FenceCreateFlagBits::eSignaled)
+    //);
 }
 
 void Engine::main_loop(void)
@@ -536,6 +547,47 @@ void Engine::main_loop(void)
 
 void Engine::draw_frame(void)
 {
+    auto [result, image_index] = this->swapchain.acquireNextImage(
+        UINT64_MAX,
+        present_complete,
+        nullptr
+    );
+    record_command_buffer(image_index);
+
+    vk::PipelineStageFlags stage_flags(vk::PipelineStageFlagBits::eColorAttachmentOutput);
+    vk::SubmitInfo submit_info(
+        { *present_complete },
+        { stage_flags },
+        { *this->command_buffer },
+        { *render_finished }
+    );
+    this->queue.submit(submit_info, *frame_finished);
+
+    while (this->device.waitForFences({ frame_finished }, true, UINT64_MAX) ==
+           vk::Result::eTimeout) {
+        /* do nothing */
+    }
+    this->device.resetFences({ frame_finished });
+
+    vk::PresentInfoKHR present_info(
+        { *render_finished },
+        { *this->swapchain },
+        { image_index }
+    );
+
+    result = this->queue.presentKHR(present_info);
+    if (CONFIG_VERBOSE) {
+        switch (result) {
+        case vk::Result::eSuccess: break;
+        case vk::Result::eSuboptimalKHR:
+            std::cout << "vk::Queue::PresentKHR returned vk::Result::eSuboptimalKHR\n";
+            break;
+        default:
+            std::cout << "vk::Queue::PresentKHR returned unexpected result: " << result << '\n';
+            break;
+        }
+    }
+
 }
 
 void Engine::cleanup(void)
@@ -547,13 +599,14 @@ void Engine::cleanup(void)
 // ====================================================================================================================
 // util functions
 
-vk::DependencyInfo Engine::transition_image_layout(const vk::Image &current_frame,
-                                                   vk::ImageLayout old_layout,
-                                                   vk::ImageLayout new_layout,
-                                                   vk::AccessFlags2 scr_access_mask,
-                                                   vk::AccessFlags2 dst_access_mask,
-                                                   vk::PipelineStageFlags2 src_stage_mask,
-                                                   vk::PipelineStageFlags2 dst_stage_mask)
+void Engine::transition_image_layout(vk::raii::CommandBuffer &cb,
+                                     const vk::Image &current_frame,
+                                     vk::ImageLayout old_layout,
+                                     vk::ImageLayout new_layout,
+                                     vk::AccessFlags2 scr_access_mask,
+                                     vk::AccessFlags2 dst_access_mask,
+                                     vk::PipelineStageFlags2 src_stage_mask,
+                                     vk::PipelineStageFlags2 dst_stage_mask)
 {
     vk::ImageSubresourceRange subresource_range(
         vk::ImageAspectFlagBits::eColor,
@@ -581,7 +634,8 @@ vk::DependencyInfo Engine::transition_image_layout(const vk::Image &current_fram
         { barrier }
     );
 
-    return dependency_info;
+
+    cb.pipelineBarrier2(dependency_info);
 }
 
 vk::raii::ShaderModule Engine::create_shader_module(const vk::raii::Device &dev,
