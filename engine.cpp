@@ -72,7 +72,7 @@ void Engine::init_vulkan(void)
     create_image_views();
     create_graphics_pipeline();
     create_command_pool();
-    create_command_buffer();
+    create_command_buffers();
     create_sync_objects();
 }
 
@@ -435,27 +435,25 @@ void Engine::create_command_pool(void)
     this->command_pool = vk::raii::CommandPool(this->device, create_info);
 }
 
-void Engine::create_command_buffer(void)
+void Engine::create_command_buffers(void)
 {
     vk::CommandBufferAllocateInfo allocate_info(
         this->command_pool,
         vk::CommandBufferLevel::ePrimary,
-        1
+        CONFIG_MAX_FRAMES_IN_FLIGHT
     );
 
-    this->command_buffer = std::move(
-        vk::raii::CommandBuffers(this->device, allocate_info).front()
-    );
+    this->command_buffers = vk::raii::CommandBuffers(this->device, allocate_info);
 }
 
-void Engine::record_command_buffer(uint32_t image_index)
+void Engine::record_command_buffer(uint32_t image_index, uint32_t frame_index)
 {
     // begin command buffer
-    this->command_buffer.begin({});
+    this->command_buffers.at(frame_index).begin({});
 
     // transition the swapchain image to COLOR_ATTACHMENT_OPTIMAL
     transition_image_layout(
-        this->command_buffer,
+        this->command_buffers.at(frame_index),
         this->swapchain_images.at(image_index),
         vk::ImageLayout::eUndefined,
         vk::ImageLayout::eColorAttachmentOptimal,
@@ -483,13 +481,16 @@ void Engine::record_command_buffer(uint32_t image_index)
         {},
         { attachment_info }
     );
-    this->command_buffer.beginRendering(rendering_info);
+    this->command_buffers.at(frame_index).beginRendering(rendering_info);
 
     // bind pipeline
-    this->command_buffer.bindPipeline(vk::PipelineBindPoint::eGraphics, this->pipeline);
+    this->command_buffers.at(frame_index).bindPipeline(
+        vk::PipelineBindPoint::eGraphics,
+        this->pipeline
+    );
 
     // set dynamic states
-    this->command_buffer.setViewport(
+    this->command_buffers.at(frame_index).setViewport(
         0,
         vk::Viewport(
             0,
@@ -500,20 +501,20 @@ void Engine::record_command_buffer(uint32_t image_index)
             1
         )
     );
-    this->command_buffer.setScissor(
+    this->command_buffers.at(frame_index).setScissor(
         0,
         vk::Rect2D(vk::Offset2D(0, 0), this->swapchain_extent)
     );
 
     // draw
-    this->command_buffer.draw(3, 1, 0, 0);
+    this->command_buffers.at(frame_index).draw(3, 1, 0, 0);
 
     // end rendering
-    this->command_buffer.endRendering();
+    this->command_buffers.at(frame_index).endRendering();
 
     // transition the swapchain image to PRESENT_SRC
     transition_image_layout(
-        this->command_buffer,
+        this->command_buffers.at(frame_index),
         this->swapchain_images.at(image_index),
         vk::ImageLayout::eColorAttachmentOptimal,
         vk::ImageLayout::ePresentSrcKHR,
@@ -524,53 +525,65 @@ void Engine::record_command_buffer(uint32_t image_index)
     );
 
     // end command buffer
-    this->command_buffer.end();
+    this->command_buffers.at(frame_index).end();
 }
 
 void Engine::create_sync_objects(void)
 {
-    this->present_complete = vk::raii::Semaphore(this->device, vk::SemaphoreCreateInfo());
-    this->render_finished = vk::raii::Semaphore(this->device, vk::SemaphoreCreateInfo());
-    this->frame_finished = vk::raii::Fence(this->device, vk::FenceCreateInfo());
-    //    this->device,
-    //    vk::FenceCreateInfo(vk::FenceCreateFlagBits::eSignaled)
-    //);
+    for (int i = 0; i < CONFIG_MAX_FRAMES_IN_FLIGHT; i++) {
+        this->present_complete.push_back(
+            vk::raii::Semaphore(this->device, vk::SemaphoreCreateInfo())
+        );
+        this->render_finished.push_back(
+            vk::raii::Semaphore(this->device, vk::SemaphoreCreateInfo())
+        );
+        this->frame_finished.push_back(
+            vk::raii::Fence(this->device, vk::FenceCreateInfo())
+        );
+    }
 }
 
 void Engine::main_loop(void)
 {
+    uint32_t current_frame = 0;
+
     while (not glfwWindowShouldClose(this->window)) {
         glfwPollEvents();
-        draw_frame();
+        draw_frame(current_frame);
+        current_frame = (current_frame + 1) / CONFIG_MAX_FRAMES_IN_FLIGHT;
     }
+
+    this->device.waitIdle();
 }
 
-void Engine::draw_frame(void)
+void Engine::draw_frame(int frame_idx)
 {
     auto [result, image_index] = this->swapchain.acquireNextImage(
         UINT64_MAX,
-        present_complete,
+        present_complete.at(frame_idx),
         nullptr
     );
-    record_command_buffer(image_index);
+    record_command_buffer(image_index, frame_idx);
 
     vk::PipelineStageFlags stage_flags(vk::PipelineStageFlagBits::eColorAttachmentOutput);
     vk::SubmitInfo submit_info(
-        { *present_complete },
+        { *present_complete.at(frame_idx) },
         { stage_flags },
-        { *this->command_buffer },
-        { *render_finished }
+        { *this->command_buffers.at(frame_idx) },
+        { *render_finished.at(frame_idx) }
     );
-    this->queue.submit(submit_info, *frame_finished);
+    this->queue.submit(submit_info, *frame_finished.at(frame_idx));
 
-    while (this->device.waitForFences({ frame_finished }, true, UINT64_MAX) ==
+    while (this->device.waitForFences({ frame_finished.at(frame_idx) },
+                                      true,
+                                      UINT64_MAX) ==
            vk::Result::eTimeout) {
         /* do nothing */
     }
-    this->device.resetFences({ frame_finished });
+    this->device.resetFences({ frame_finished.at(frame_idx) });
 
     vk::PresentInfoKHR present_info(
-        { *render_finished },
+        { *render_finished.at(frame_idx) },
         { *this->swapchain },
         { image_index }
     );
@@ -587,7 +600,6 @@ void Engine::draw_frame(void)
             break;
         }
     }
-
 }
 
 void Engine::cleanup(void)
