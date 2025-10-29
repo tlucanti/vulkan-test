@@ -38,13 +38,13 @@ private:
         void create_graphics_pipeline(void);
 
         void create_command_pool(void);
-        void create_command_buffer(void);
-        void record_command_buffer(uint32_t image_index);
+        void create_command_buffers(void);
+        void record_command_buffer(uint32_t image_index, uint32_t frame_index);
         void create_sync_objects(void);
 
     // main loop functions
     void main_loop(void);
-        void draw_frame(void);
+        void draw_frame(int frame_idx);
 
     void cleanup(void);
 
@@ -112,11 +112,11 @@ private:
     vk::raii::Pipeline               pipeline        = nullptr;
 
     vk::raii::CommandPool            command_pool    = nullptr;
-    vk::raii::CommandBuffer          command_buffer  = nullptr;
+    std::vector<vk::raii::CommandBuffer> command_buffers;
 
-    vk::raii::Semaphore              present_complete= nullptr;
-    vk::raii::Semaphore              render_finished = nullptr;
-    vk::raii::Fence                  frame_finished  = nullptr;
+    std::vector<vk::raii::Semaphore> present_complete;
+    std::vector<vk::raii::Semaphore> render_finished;
+    std::vector<vk::raii::Fence>     frame_finished;
 };
 
 #endif /* ENGINE_HPP */
