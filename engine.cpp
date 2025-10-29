@@ -50,7 +50,11 @@ void Engine::init_window(void)
     glfwInit();
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+    if (CONFIG_RESIZABLE) {
+        glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
+    } else {
+        glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+    }
 
     this->window = glfwCreateWindow(
         WIDTH,
@@ -252,6 +256,11 @@ void Engine::create_swapchain(void)
     image_count = surface_capabilities.minImageCount + 1;
     if (surface_capabilities.maxImageCount) {
         image_count = std::min(image_count, surface_capabilities.maxImageCount);
+    }
+
+    if (CONFIG_VERBOSE) {
+        std::cout << "current window size:";
+        std::cout << this->swapchain_extent.width << 'x' << this->swapchain_extent.height << '\n';
     }
 
     vk::SwapchainCreateInfoKHR create_info(
@@ -543,6 +552,22 @@ void Engine::create_sync_objects(void)
     }
 }
 
+void Engine::recreate_swapchain(void)
+{
+    this->device.waitIdle();
+
+    cleanup_swapchain();
+
+    create_swapchain();
+    create_image_views();
+}
+
+void Engine::cleanup_swapchain(void)
+{
+    this->swapchain_image_views.clear();
+    this->swapchain = nullptr;
+}
+
 void Engine::main_loop(void)
 {
     uint32_t current_frame = 0;
@@ -591,9 +616,10 @@ void Engine::draw_frame(int frame_idx)
     result = this->queue.presentKHR(present_info);
     if (CONFIG_VERBOSE) {
         switch (result) {
-        case vk::Result::eSuccess: break;
+        case vk::Result::eSuccess:
+            break;
         case vk::Result::eSuboptimalKHR:
-            std::cout << "vk::Queue::PresentKHR returned vk::Result::eSuboptimalKHR\n";
+            recreate_swapchain();
             break;
         default:
             std::cout << "vk::Queue::PresentKHR returned unexpected result: " << result << '\n';
@@ -604,6 +630,8 @@ void Engine::draw_frame(int frame_idx)
 
 void Engine::cleanup(void)
 {
+    cleanup_swapchain();
+
     glfwDestroyWindow(this->window);
     glfwTerminate();
 }
