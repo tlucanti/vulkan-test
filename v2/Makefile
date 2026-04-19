@@ -9,11 +9,7 @@ LDFLAGS	= -lglfw -lvulkan
 CFLAGS += -g3 -O0
 CFLAGS += -D CONFIG_VALIDATION_LAYERS=1
 
-all: stb_image tiny_obj_loader model extentions triangle
-
-extentions:
-	$(CC) $(CFLAGS) $(INCLUDE) extentions.cpp $(LDFLAGS) -o extentions
-.PHONY: extentions
+all: stb_image tiny_obj_loader model triangle
 
 triangle:
 	$(GLSLC) shaders/triangle.vert -o vert.spv
