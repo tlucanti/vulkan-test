@@ -1,7 +1,9 @@
 #!/bin/bash
 
-CXX	= clang++
-VK_SDK	= $(PWD)/../vulkan-sdk/
+include ../.env
+
+CXX	?= clang++
+VK_SDK	?= $(PWD)/../vulkan-sdk/
 
 CXXFLAGS  = \
 	-O0 -g3 \

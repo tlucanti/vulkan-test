@@ -1,7 +1,7 @@
 
 compile_commands.json
-/vulkan.pcm
-/main.elf
+vulkan.pcm
+main.elf
 *.o
-/.cache
+.cache
 *.spv
