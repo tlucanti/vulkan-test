@@ -13,15 +13,15 @@
 #include <tuple>
 #include <vector>
 
-#ifdef __CLANGD__
-# undef VULKAN_HPP_NO_STRUCT_CONSTRUCTORS
-# undef VULKAN_HPP_DISABLE_ENHANCED_MODE
-# undef VULKAN_HPP_NO_STRUCT_SETTERS
-# include "vulkan/vulkan.cppm"
-# define __CLANGD_NO_ENGINE_HPP__
-#else
-  import vulkan_hpp;
-#endif
+//#ifdef __CLANGD__
+//# undef VULKAN_HPP_NO_STRUCT_CONSTRUCTORS
+//# undef VULKAN_HPP_DISABLE_ENHANCED_MODE
+//# undef VULKAN_HPP_NO_STRUCT_SETTERS
+//# include "vulkan/vulkan.cppm"
+//# define __CLANGD_NO_ENGINE_HPP__
+//#else
+//  import vulkan_hpp;
+//#endif
 
 #include "engine.hpp"
 

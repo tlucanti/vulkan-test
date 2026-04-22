@@ -4,17 +4,17 @@ include ../.env
 
 CXX	?= clang++
 VK_SDK	?= $(PWD)/../vulkan-sdk/
+SLANGC  ?= $(VK_SDK)/x86_64/bin/slangc
 
-CXXFLAGS  = \
-	-O0 -g3 \
-	-std=c++23 \
-	-I $(VK_SDK)/x86_64/include/ \
-	\
-	-Wall \
-	-Wextra \
-	-Werror \
-	-Wno-eager-load-cxx-named-modules \
-	\
+CXXFLAGS  =				\
+	-O0 -g3				\
+	-std=c++23			\
+	-I $(VK_SDK)/x86_64/include/	\
+	-L $(VK_SDK)/lib		\
+					\
+	-Wall				\
+	-Wextra				\
+					\
 	-D CONFIG_VALIDATION_LAYERS=1	\
 	-D CONFIG_VERBOSE=1		\
 	-D CONFIG_RESIZABLE=1		\
@@ -23,23 +23,16 @@ CXXFLAGS  = \
 
 NAME	= main.elf
 
-$(NAME): Makefile vulkan.pcm main.cpp engine.cpp engine.hpp shader.spv
-	$(CXX) \
-		$(CXXFLAGS) \
-		-fmodule-file=vulkan.pcm \
-		main.cpp engine.cpp \
-		-l glfw \
+$(NAME): Makefile main.cpp engine.cpp engine.hpp shader.spv
+	$(CXX)				\
+		$(CXXFLAGS)		\
+		main.cpp engine.cpp	\
+		-l glfw			\
+		-l vulkan		\
 		-o main.elf
 
-vulkan.pcm: Makefile
-	$(CXX) \
-		$(CXXFLAGS) \
-		--precompile \
-		-o vulkan.pcm \
-		$(VK_SDK)/x86_64/include/vulkan/vulkan.cppm
-
 shader.spv: Makefile shader.slang
-	slangc \
+	$(SLANGC) \
 		shader.slang \
 		-profile spirv_1_4 \
 		-emit-spirv-directly \
@@ -49,4 +42,4 @@ shader.spv: Makefile shader.slang
 		-o shader.spv
 
 clean:
-	rm -f $(NAME) vulkan.pcm
+	rm -f $(NAME)
