@@ -44,6 +44,7 @@ private:
         void create_command_buffers(void);
         void record_command_buffer(uint32_t image_index, uint32_t frame_index);
         void create_sync_objects(void);
+        void create_swapchain_sync_objects(void);
 
     // window resize functions
     void recreate_swapchain(void);

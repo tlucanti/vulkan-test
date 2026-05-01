@@ -78,6 +78,7 @@ void Engine::init_vulkan(void)
     create_command_pool();
     create_command_buffers();
     create_sync_objects();
+    create_swapchain_sync_objects();
 }
 
 void Engine::create_instance(void)
@@ -552,6 +553,18 @@ void Engine::create_sync_objects(void)
     }
 }
 
+void Engine::create_swapchain_sync_objects(void)
+{
+    this->render_finished.clear();
+    this->render_finished.reserve(this->swapchain_images.size());
+
+    for (size_t i = 0; i < this->swapchain_images.size(); i++) {
+        this->render_finished.emplace_back(
+            vk::raii::Semaphore(this->device, vk::SemaphoreCreateInfo())
+        );
+    }
+}
+
 void Engine::recreate_swapchain(void)
 {
     this->device.waitIdle();
@@ -560,6 +573,7 @@ void Engine::recreate_swapchain(void)
 
     create_swapchain();
     create_image_views();
+    create_swapchain_sync_objects();
 }
 
 void Engine::cleanup_swapchain(void)
@@ -575,7 +589,7 @@ void Engine::main_loop(void)
     while (not glfwWindowShouldClose(this->window)) {
         glfwPollEvents();
         draw_frame(current_frame);
-        current_frame = (current_frame + 1) / CONFIG_MAX_FRAMES_IN_FLIGHT;
+        current_frame = (current_frame + 1) % CONFIG_MAX_FRAMES_IN_FLIGHT;
     }
 
     this->device.waitIdle();
@@ -595,7 +609,7 @@ void Engine::draw_frame(int frame_idx)
         { *present_complete.at(frame_idx) },
         { stage_flags },
         { *this->command_buffers.at(frame_idx) },
-        { *render_finished.at(frame_idx) }
+        { *render_finished.at(image_index) }
     );
     this->queue.submit(submit_info, *frame_finished.at(frame_idx));
 
@@ -608,7 +622,7 @@ void Engine::draw_frame(int frame_idx)
     this->device.resetFences({ frame_finished.at(frame_idx) });
 
     vk::PresentInfoKHR present_info(
-        { *render_finished.at(frame_idx) },
+        { *render_finished.at(image_index) },
         { *this->swapchain },
         { image_index }
     );
