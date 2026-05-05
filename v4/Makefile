@@ -22,13 +22,25 @@ CXXFLAGS  =				\
 
 
 NAME	= main.elf
+DEP	= Makefile \
+	  main.cpp \
+	  engine.cpp \
+	  engine.hpp \
+	  vertex.hpp \
+	  util.cpp \
+	  shader.spv
 
-$(NAME): Makefile main.cpp engine.cpp engine.hpp shader.spv
+$(NAME): $(DEP)
 	$(CXX)				\
 		$(CXXFLAGS)		\
-		main.cpp engine.cpp	\
+					\
+		main.cpp		\
+		engine.cpp		\
+		util.cpp		\
+					\
 		-l glfw			\
 		-l vulkan		\
+					\
 		-o main.elf
 
 shader.spv: Makefile shader.slang
