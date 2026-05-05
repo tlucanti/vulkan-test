@@ -9,7 +9,11 @@ static inline uint64_t BIT(uint64_t x)
     return 1 << x;
 }
 
-uint32_t Engine::find_memory_type(const vk::raii::PhysicalDevice &device, uint32_t type_filter, vk::MemoryPropertyFlags properties)
+uint32_t Engine::find_memory_type(
+        const vk::raii::PhysicalDevice &pd,
+        uint32_t type_filter,
+        vk::MemoryPropertyFlags properties
+    )
 {
     vk::PhysicalDeviceMemoryProperties mem_props = device.getMemoryProperties();
 
@@ -26,14 +30,16 @@ uint32_t Engine::find_memory_type(const vk::raii::PhysicalDevice &device, uint32
     throw std::runtime_error("failed to find sutable memory type");
 }
 
-void Engine::transition_image_layout(vk::raii::CommandBuffer &cb,
-                                     const vk::Image &current_frame,
-                                     vk::ImageLayout old_layout,
-                                     vk::ImageLayout new_layout,
-                                     vk::AccessFlags2 scr_access_mask,
-                                     vk::AccessFlags2 dst_access_mask,
-                                     vk::PipelineStageFlags2 src_stage_mask,
-                                     vk::PipelineStageFlags2 dst_stage_mask)
+void Engine::transition_image_layout(
+        vk::raii::CommandBuffer &cb,
+        const vk::Image &current_frame,
+        vk::ImageLayout old_layout,
+        vk::ImageLayout new_layout,
+        vk::AccessFlags2 scr_access_mask,
+        vk::AccessFlags2 dst_access_mask,
+        vk::PipelineStageFlags2 src_stage_mask,
+        vk::PipelineStageFlags2 dst_stage_mask
+    )
 {
     vk::ImageSubresourceRange subresource_range(
         vk::ImageAspectFlagBits::eColor,
@@ -65,8 +71,10 @@ void Engine::transition_image_layout(vk::raii::CommandBuffer &cb,
     cb.pipelineBarrier2(dependency_info);
 }
 
-vk::raii::ShaderModule Engine::create_shader_module(const vk::raii::Device &dev,
-                                                    const std::vector<char> &shader_code)
+vk::raii::ShaderModule Engine::create_shader_module(
+        const vk::raii::Device &dev,
+        const std::vector<char> &shader_code
+    )
 {
     vk::ShaderModuleCreateInfo create_info(
         {},
@@ -77,8 +85,10 @@ vk::raii::ShaderModule Engine::create_shader_module(const vk::raii::Device &dev,
     return vk::raii::ShaderModule(dev, create_info);
 }
 
-vk::SurfaceFormatKHR Engine::choose_swapchain_surface_format(const vk::raii::PhysicalDevice &pd,
-                                                             const vk::raii::SurfaceKHR &surface)
+vk::SurfaceFormatKHR Engine::choose_swapchain_surface_format(
+        const vk::raii::PhysicalDevice &pd,
+        const vk::raii::SurfaceKHR &surface
+    )
 {
     std::vector<vk::SurfaceFormatKHR> avaliable_formats = pd.getSurfaceFormatsKHR(surface);
 
@@ -98,8 +108,10 @@ vk::SurfaceFormatKHR Engine::choose_swapchain_surface_format(const vk::raii::Phy
     return avaliable_formats.front();
 }
 
-vk::PresentModeKHR Engine::choose_swapchain_present_mode(const vk::raii::PhysicalDevice &pd,
-                                                         const vk::raii::SurfaceKHR &surface)
+vk::PresentModeKHR Engine::choose_swapchain_present_mode(
+        const vk::raii::PhysicalDevice &pd,
+        const vk::raii::SurfaceKHR &surface
+    )
 {
     std::vector<vk::PresentModeKHR> avaliable_present_modes = pd.getSurfacePresentModesKHR(surface);
 
@@ -115,9 +127,11 @@ vk::PresentModeKHR Engine::choose_swapchain_present_mode(const vk::raii::Physica
     return vk::PresentModeKHR::eFifo;
 }
 
-vk::Extent2D Engine::choose_swapchain_extent(const vk::raii::PhysicalDevice &pd,
-                                             const vk::raii::SurfaceKHR &surface,
-                                             GLFWwindow *window)
+vk::Extent2D Engine::choose_swapchain_extent(
+        const vk::raii::PhysicalDevice &pd,
+        const vk::raii::SurfaceKHR &surface,
+        GLFWwindow *window
+    )
 {
     vk::SurfaceCapabilitiesKHR capabilities = pd.getSurfaceCapabilitiesKHR(surface);
     int width, height;
@@ -133,8 +147,10 @@ vk::Extent2D Engine::choose_swapchain_extent(const vk::raii::PhysicalDevice &pd,
     return { static_cast<uint32_t>(width), static_cast<uint32_t>(height) };
 }
 
-uint32_t Engine::get_queue_family_index(const vk::raii::PhysicalDevice &pd,
-                                        const vk::raii::SurfaceKHR &surface)
+uint32_t Engine::get_queue_family_index(
+        const vk::raii::PhysicalDevice &pd,
+        const vk::raii::SurfaceKHR &surface
+    )
 {
     std::vector<vk::QueueFamilyProperties> props = pd.getQueueFamilyProperties();
     uint32_t                               idx   = 0;
@@ -236,9 +252,11 @@ std::vector<char> Engine::read_file(const std::string &fname)
 }
 
 vk::Bool32 Engine::debug_callback(
-    vk::DebugUtilsMessageSeverityFlagBitsEXT severity,
-    vk::DebugUtilsMessageTypeFlagsEXT type,
-    const vk::DebugUtilsMessengerCallbackDataEXT *callback_data, void *)
+        vk::DebugUtilsMessageSeverityFlagBitsEXT severity,
+        vk::DebugUtilsMessageTypeFlagsEXT type,
+        const vk::DebugUtilsMessengerCallbackDataEXT *callback_data,
+        void *
+    )
 {
     (void)type;
 

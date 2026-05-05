@@ -1,14 +1,6 @@
 #ifndef ENGINE_HPP
 #define ENGINE_HPP
 
-//#if defined(__CLANGD__)
-//# if !defined(__CLANGD_NO_ENGINE_HPP__)
-//#  include <vulkan/vulkan_raii.hpp>
-//# endif
-//#else
-//  import vulkan_hpp;
-//#endif
-
 #include "vulkan/vulkan.hpp"
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan_raii.hpp>
@@ -46,6 +38,7 @@ private:
         void create_command_pool(void);
         void create_command_buffers(void);
         void record_command_buffer(uint32_t image_index, uint32_t frame_index);
+
         void create_sync_objects(void);
         void create_swapchain_sync_objects(void);
 
@@ -61,47 +54,73 @@ private:
 
     // util functions
     [[nodiscard]]
-    static uint32_t find_memory_type(const vk::raii::PhysicalDevice &device,
-                                   uint32_t typeFileter,
-                                   vk::MemoryPropertyFlags properties);
+    static uint32_t find_memory_type(
+        const vk::raii::PhysicalDevice &pd,
+        uint32_t typeFileter,
+        vk::MemoryPropertyFlags properties
+    );
 
-    static void        transition_image_layout(vk::raii::CommandBuffer &cb,
-                                               const vk::Image &current_frame,
-                                               vk::ImageLayout old_layout,
-                                               vk::ImageLayout new_layout,
-                                               vk::AccessFlags2 scr_access_mask,
-                                               vk::AccessFlags2 dst_access_mask,
-                                               vk::PipelineStageFlags2 src_stage_mask,
-                                               vk::PipelineStageFlags2 dst_stage_mask);
+    static void transition_image_layout(
+        vk::raii::CommandBuffer &cb,
+        const vk::Image &current_frame,
+        vk::ImageLayout old_layout,
+        vk::ImageLayout new_layout,
+        vk::AccessFlags2 scr_access_mask,
+        vk::AccessFlags2 dst_access_mask,
+        vk::PipelineStageFlags2 src_stage_mask,
+        vk::PipelineStageFlags2 dst_stage_mask
+    );
+
     [[nodiscard]]
-    static vk::raii::ShaderModule    create_shader_module(const vk::raii::Device &dev,
-                                                          const std::vector<char> &shader_code);
+    static vk::raii::ShaderModule create_shader_module(
+        const vk::raii::Device &dev,
+        const std::vector<char> &shader_code
+    );
+
     [[nodiscard]]
-    static vk::SurfaceFormatKHR      choose_swapchain_surface_format(const vk::raii::PhysicalDevice &pd,
-                                                                     const vk::raii::SurfaceKHR &surface);
+    static vk::SurfaceFormatKHR choose_swapchain_surface_format(
+        const vk::raii::PhysicalDevice &pd,
+        const vk::raii::SurfaceKHR &surface
+    );
+
     [[nodiscard]]
-    static vk::PresentModeKHR        choose_swapchain_present_mode(const vk::raii::PhysicalDevice &pd,
-                                                                   const vk::raii::SurfaceKHR &surface);
+    static vk::PresentModeKHR choose_swapchain_present_mode(
+        const vk::raii::PhysicalDevice &pd,
+        const vk::raii::SurfaceKHR &surface
+    );
+
     [[nodiscard]]
-    static vk::Extent2D              choose_swapchain_extent(const vk::raii::PhysicalDevice &pd,
-                                                             const vk::raii::SurfaceKHR &surface,
-                                                             GLFWwindow *window);
+    static vk::Extent2D choose_swapchain_extent(
+        const vk::raii::PhysicalDevice &pd,
+        const vk::raii::SurfaceKHR &surface,
+        GLFWwindow *window
+    );
+
     [[nodiscard]]
-    static uint32_t                  get_queue_family_index(const vk::raii::PhysicalDevice &pd,
-                                                            const vk::raii::SurfaceKHR &surface);
+    static uint32_t get_queue_family_index(
+        const vk::raii::PhysicalDevice &pd,
+        const vk::raii::SurfaceKHR &surface
+    );
+
     [[nodiscard]]
-    static int                       get_physical_device_score(const vk::raii::PhysicalDevice &pd);
+    static int get_physical_device_score(const vk::raii::PhysicalDevice &pd);
+
     [[nodiscard]]
     static std::vector<const char *> get_required_device_extensions();
+
     [[nodiscard]]
     static std::vector<const char *> get_required_instance_extensions();
+
     [[nodiscard]]
-    static vk::Bool32                debug_callback(vk::DebugUtilsMessageSeverityFlagBitsEXT severity,
-                                                    vk::DebugUtilsMessageTypeFlagsEXT type,
-                                                    const vk::DebugUtilsMessengerCallbackDataEXT *callback_data,
-                                                    void *);
+    static vk::Bool32 debug_callback(
+        vk::DebugUtilsMessageSeverityFlagBitsEXT severity,
+        vk::DebugUtilsMessageTypeFlagsEXT type,
+        const vk::DebugUtilsMessengerCallbackDataEXT *callback_data,
+        void *
+    );
+
     [[nodiscard]]
-    static std::vector<char>         read_file(const std::string &fname);
+    static std::vector<char> read_file(const std::string &fname);
 
 private:
     GLFWwindow                       *window         = nullptr;
