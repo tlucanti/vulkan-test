@@ -9,6 +9,7 @@
 //  import vulkan_hpp;
 //#endif
 
+#include "vulkan/vulkan.hpp"
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan_raii.hpp>
 
@@ -40,6 +41,8 @@ private:
 
         void create_graphics_pipeline(void);
 
+        void create_vertex_buffer(void);
+
         void create_command_pool(void);
         void create_command_buffers(void);
         void record_command_buffer(uint32_t image_index, uint32_t frame_index);
@@ -57,6 +60,11 @@ private:
     void cleanup(void);
 
     // util functions
+    [[nodiscard]]
+    static uint32_t find_memory_type(const vk::raii::PhysicalDevice &device,
+                                   uint32_t typeFileter,
+                                   vk::MemoryPropertyFlags properties);
+
     static void        transition_image_layout(vk::raii::CommandBuffer &cb,
                                                const vk::Image &current_frame,
                                                vk::ImageLayout old_layout,
@@ -118,6 +126,9 @@ private:
 
     vk::raii::PipelineLayout         pipeline_layout = nullptr;
     vk::raii::Pipeline               pipeline        = nullptr;
+
+    vk::raii::Buffer                 vertex_buffer        = nullptr;
+    vk::raii::DeviceMemory           vertex_buffer_memory = nullptr;
 
     vk::raii::CommandPool            command_pool    = nullptr;
     std::vector<vk::raii::CommandBuffer> command_buffers;

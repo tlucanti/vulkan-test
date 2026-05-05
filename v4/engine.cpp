@@ -1,4 +1,5 @@
 
+#include "vulkan/vulkan.hpp"
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
@@ -10,20 +11,15 @@
 #include <map>
 #include <stdexcept>
 #include <string>
-#include <tuple>
 #include <vector>
 
-//#ifdef __CLANGD__
-//# undef VULKAN_HPP_NO_STRUCT_CONSTRUCTORS
-//# undef VULKAN_HPP_DISABLE_ENHANCED_MODE
-//# undef VULKAN_HPP_NO_STRUCT_SETTERS
-//# include "vulkan/vulkan.cppm"
-//# define __CLANGD_NO_ENGINE_HPP__
-//#else
-//  import vulkan_hpp;
-//#endif
-
 #include "engine.hpp"
+#include "vertex.hpp"
+
+uint64_t static inline BIT(uint64_t x)
+{
+    return 1 << x;
+}
 
 using namespace std::string_literals;
 
@@ -35,6 +31,12 @@ const std::vector<const char *> g_validation_layers = {
 #if CONFIG_VALIDATION_LAYERS
     "VK_LAYER_KHRONOS_validation",
 #endif
+};
+
+const std::vector<Vertex> vertices = {
+    {{ 0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+    {{ 0.5f,  0.5f}, {0.0f, 1.0f, 0.0f}},
+    {{-0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}},
 };
 
 void Engine::run(void)
@@ -75,6 +77,7 @@ void Engine::init_vulkan(void)
     create_swapchain();
     create_image_views();
     create_graphics_pipeline();
+    create_vertex_buffer();
     create_command_pool();
     create_command_buffers();
     create_sync_objects();
@@ -331,7 +334,13 @@ void Engine::create_graphics_pipeline(void)
     };
 
     // vertex input state
-    vk::PipelineVertexInputStateCreateInfo vertex_input;
+    auto binding_description = Vertex::get_binding_description();
+    auto attribute_descriptions = Vertex::get_attribute_descriptions();
+    vk::PipelineVertexInputStateCreateInfo vertex_input(
+        {},
+        { binding_description },
+        attribute_descriptions
+    );
 
     // input assembly state
     vk::PipelineInputAssemblyStateCreateInfo assembler(
@@ -435,6 +444,33 @@ void Engine::create_graphics_pipeline(void)
     this->pipeline = vk::raii::Pipeline(this->device, nullptr, pipeline_create_info);
 }
 
+void Engine::create_vertex_buffer(void)
+{
+    vk::BufferCreateInfo buffer_info = vk::BufferCreateInfo(
+        {},
+        sizeof(vertices[0]) * vertices.size(),
+        vk::BufferUsageFlagBits::eVertexBuffer,
+        vk::SharingMode::eExclusive
+    );
+
+    this->vertex_buffer = vk::raii::Buffer(this->device, buffer_info);
+
+    vk::MemoryRequirements mem_req = this->vertex_buffer.getMemoryRequirements();
+    uint32_t type_index = find_memory_type(
+        this->physical_device,
+        mem_req.memoryTypeBits,
+        vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
+    );
+    vk::MemoryAllocateInfo alloc_info(mem_req.size, type_index);
+
+    this->vertex_buffer_memory = vk::raii::DeviceMemory(this->device, alloc_info);
+    this->vertex_buffer.bindMemory(*this->vertex_buffer_memory, 0);
+
+    void *ptr = this->vertex_buffer_memory.mapMemory(0, buffer_info.size);
+    memcpy(ptr, vertices.data(), buffer_info.size);
+    this->vertex_buffer_memory.unmapMemory();
+}
+
 void Engine::create_command_pool(void)
 {
     vk::CommandPoolCreateInfo create_info(
@@ -497,6 +533,13 @@ void Engine::record_command_buffer(uint32_t image_index, uint32_t frame_index)
     this->command_buffers.at(frame_index).bindPipeline(
         vk::PipelineBindPoint::eGraphics,
         this->pipeline
+    );
+
+    // bind vertex buffer
+    this->command_buffers.at(frame_index).bindVertexBuffers(
+        0,
+        { this->vertex_buffer },
+        { 0 }
     );
 
     // set dynamic states
@@ -652,6 +695,23 @@ void Engine::cleanup(void)
 
 // ====================================================================================================================
 // util functions
+
+uint32_t Engine::find_memory_type(const vk::raii::PhysicalDevice &device, uint32_t type_filter, vk::MemoryPropertyFlags properties)
+{
+    vk::PhysicalDeviceMemoryProperties mem_props = device.getMemoryProperties();
+
+    for (uint32_t i = 0; i < mem_props.memoryTypeCount; i++) {
+        if ((type_filter & BIT(i)) == 0) {
+            continue;
+        }
+
+        if ((mem_props.memoryTypes[i].propertyFlags & properties) == properties) {
+            return i;
+        }
+    }
+
+    throw std::runtime_error("failed to find sutable memory type");
+}
 
 void Engine::transition_image_layout(vk::raii::CommandBuffer &cb,
                                      const vk::Image &current_frame,
