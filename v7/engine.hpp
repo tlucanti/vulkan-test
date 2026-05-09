@@ -153,6 +153,7 @@ private:
         Double2    center;
         double     zoom;
         double     zoom_padding;
+        int        iter;
     };
 
     struct UniformBufferObject       ubo;

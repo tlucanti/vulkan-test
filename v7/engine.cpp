@@ -699,6 +699,7 @@ void Engine::cleanup_swapchain(void)
 bool Engine::process_input(void)
 {
     constexpr double zoom_step = 1.01;
+    constexpr float iter_step = 1.05;
     const double move_step = 0.01 / this->ubo.zoom;
     bool press = false;
 
@@ -732,6 +733,18 @@ bool Engine::process_input(void)
         press = true;
     }
 
+    if (glfwGetKey(this->window, GLFW_KEY_UP) == GLFW_PRESS) {
+        this->ubo.iter++;
+        this->ubo.iter = (int)(this->ubo.iter * iter_step);
+        press = true;
+    }
+
+    if (glfwGetKey(this->window, GLFW_KEY_DOWN) == GLFW_PRESS) {
+        this->ubo.iter--;
+        this->ubo.iter = (int)(this->ubo.iter / iter_step);
+        press = true;
+    }
+
     return press;
 }
 
@@ -744,11 +757,14 @@ void Engine::main_loop(void)
     this->ubo.center = { 1.0, 0.0 };
     this->ubo.zoom = 1.0;
     this->ubo.zoom_padding = 0.0;
+    this->ubo.iter = 50;
 
     while (not glfwWindowShouldClose(this->window)) {
         glfwPollEvents();
 
-        process_input();
+        if (!process_input()) {
+            continue;
+        }
         draw_frame(current_frame);
         current_frame = (current_frame + 1) % CONFIG_MAX_FRAMES_IN_FLIGHT;
     }

@@ -4,6 +4,7 @@ struct UniformVertexBuffer {
     double2 center;
     double zoom;
     double zoom_padding;
+    int iter;
 };
 ConstantBuffer<UniformVertexBuffer> ubo;
 
@@ -17,7 +18,7 @@ double2 cmul(double2 a, double2 b)
 
 double3 main(double2 coord)
 {
-    const int ITER = 50;
+    const int ITER = ubo.iter;
     const double OUT = 4.0;
 
     double2 z = double2(0.0, 0.0);
