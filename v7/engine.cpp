@@ -31,9 +31,9 @@ static const std::vector<const char *> g_validation_layers = {
 };
 
 struct UniformBufferObject {
-    glm::mat4 model;
-    glm::mat4 view;
-    glm::mat4 proj;
+    glm::uvec2 resolution;
+    glm::vec2 center;
+    glm::float32 zoom;
 };
 
 void Engine::run(void)
@@ -317,7 +317,7 @@ void Engine::create_descriptor_set_layout(void)
         0,
         vk::DescriptorType::eUniformBuffer,
         1,
-        vk::ShaderStageFlagBits::eVertex
+        vk::ShaderStageFlagBits::eFragment
     );
 
     vk::DescriptorSetLayoutCreateInfo layout_info(
@@ -718,6 +718,10 @@ void Engine::main_loop(void)
 void Engine::update_uniform_buffer(int frame_idx)
 {
     UniformBufferObject ubo;
+
+    ubo.center = glm::vec2(0.0f, 0.0f);
+    ubo.zoom = 1.0f;
+    ubo.resolution = glm::uvec2(this->swapchain_extent.width, this->swapchain_extent.height);
 
     memcpy(this->uniform_buffers_map.at(frame_idx), &ubo, sizeof(UniformBufferObject));
 }
