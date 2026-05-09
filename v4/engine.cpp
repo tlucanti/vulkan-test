@@ -29,9 +29,14 @@ static const std::vector<const char *> g_validation_layers = {
 };
 
 static const std::vector<Vertex> g_vertices = {
-    {{ 0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-    {{ 0.5f,  0.5f}, {0.0f, 1.0f, 0.0f}},
-    {{-0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}},
+    {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+    {{ 0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
+    {{ 0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}},
+    {{-0.5f,  0.5f}, {1.0f, 1.0f, 1.0f}},
+};
+
+static const std::vector<uint16_t> g_indices = {
+    0, 1, 2, 2, 3, 0,
 };
 
 
@@ -75,6 +80,7 @@ void Engine::init_vulkan(void)
     create_graphics_pipeline();
     create_command_pool();
     create_vertex_buffer();
+    create_index_buffer();
     create_command_buffers();
     create_sync_objects();
     create_swapchain_sync_objects();
@@ -497,6 +503,33 @@ void Engine::create_vertex_buffer(void)
     copy_buffer(this->vertex_buffer, staging_buffer, size);
 }
 
+void Engine::create_index_buffer(void)
+{
+    vk::DeviceSize size = sizeof(g_indices[0]) * g_indices.size();
+
+    auto [staging_buffer, staging_buffer_mem] = create_buffer(
+        this->physical_device,
+        this->device,
+        size,
+        vk::BufferUsageFlagBits::eTransferSrc,
+        vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
+    );
+
+    void *ptr = staging_buffer_mem.mapMemory(0, size);
+    memcpy(ptr, g_indices.data(), size);
+    staging_buffer_mem.unmapMemory();
+
+    std::tie(this->index_buffer, this->index_buffer_mem) = create_buffer(
+        this->physical_device,
+        this->device,
+        size,
+        vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst,
+        vk::MemoryPropertyFlagBits::eDeviceLocal
+    );
+
+    copy_buffer(this->index_buffer, staging_buffer, size);
+}
+
 void Engine::create_command_pool(void)
 {
     vk::CommandPoolCreateInfo create_info(
@@ -568,6 +601,13 @@ void Engine::record_command_buffer(uint32_t image_index, uint32_t frame_index)
         { 0 }
     );
 
+    // bind index buffer
+    this->command_buffers.at(frame_index).bindIndexBuffer(
+        this->index_buffer,
+        0,
+        vk::IndexType::eUint16
+    );
+
     // set dynamic states
     this->command_buffers.at(frame_index).setViewport(
         0,
@@ -586,7 +626,13 @@ void Engine::record_command_buffer(uint32_t image_index, uint32_t frame_index)
     );
 
     // draw
-    this->command_buffers.at(frame_index).draw(3, 1, 0, 0);
+    this->command_buffers.at(frame_index).drawIndexed(
+        g_indices.size(),
+        1,
+        0,
+        0,
+        0
+    );
 
     // end rendering
     this->command_buffers.at(frame_index).endRendering();

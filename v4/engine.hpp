@@ -35,6 +35,7 @@ private:
 
         void copy_buffer(vk::raii::Buffer &dst, vk::raii::Buffer &src, vk::DeviceSize size);
         void create_vertex_buffer(void);
+        void create_index_buffer(void);
 
         void create_command_pool(void);
         void create_command_buffers(void);
@@ -158,6 +159,9 @@ private:
 
     vk::raii::Buffer                 vertex_buffer     = nullptr;
     vk::raii::DeviceMemory           vertex_buffer_mem = nullptr;
+
+    vk::raii::Buffer                 index_buffer      = nullptr;
+    vk::raii::DeviceMemory           index_buffer_mem  = nullptr;
 
     vk::raii::CommandPool            command_pool    = nullptr;
     std::vector<vk::raii::CommandBuffer> command_buffers;
