@@ -6,13 +6,33 @@ struct UniformVertexBuffer {
 };
 ConstantBuffer<UniformVertexBuffer> ubo;
 
-float3 main(float2 coord, float2 center, float zoom)
+float2 cmul(float2 a, float2 b)
 {
-    if (coord.x * coord.x + coord.y * coord.y < 1) {
-        return float3(1.0f, 1.0f, 1.0f);
-    } else {
-        return float3(0.0, 0.0, 0.0);
+    return float2(
+        a.x * b.x - a.y * b.y,
+        a.x * b.y + a.y * b.x
+    );
+}
+
+float3 main(float2 coord, float2 center)
+{
+    const int ITER = 50;
+    const float OUT = 4.0f;
+
+    float2 z = float2(0.0f, 0.0f);
+    int i;
+
+    for (i = 0; i < ITER; i++) {
+        z = cmul(z, z) + coord;
+        if (z.x * z.x + z.y * z.y > OUT) {
+            break;
+        }
     }
+
+    float c = 1.0f - (float)i / ITER;
+    float3 color = float3(c, c, c);
+
+    return color;
 }
 
 [shader("vertex")]
@@ -30,13 +50,14 @@ float4 vert_main(uint vertex_id : SV_VertexID) : SV_Position
 [shader("fragment")]
 float4 frag_main(float4 sv_position : SV_Position) : SV_Target
 {
-    float2 resolution = float2(ubo.resolution.x, ubo.resolution.y);
+    float2 resolution = float2(ubo.resolution);
     float2 coord = sv_position.xy / resolution;
     coord = coord * 2.0f - 1.0f;
     coord.x *= resolution.x / resolution.y;
 
+    coord /= ubo.zoom;
     coord -= ubo.center;
 
-    float3 color = main(coord, ubo.center, ubo.zoom);
+    float3 color = main(coord, ubo.center);
     return float4(color, 1.0f);
 }

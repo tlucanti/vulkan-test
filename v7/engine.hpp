@@ -7,6 +7,8 @@
 
 #include <GLFW/glfw3.h>
 
+#include <glm/glm.hpp>
+
 #include <string>
 #include <vector>
 
@@ -56,6 +58,7 @@ private:
     void main_loop(void);
         void update_uniform_buffer(int frame_idx);
         void draw_frame(int frame_idx);
+        bool process_input(void);
 
     void cleanup(void);
 
@@ -139,6 +142,13 @@ private:
     static std::vector<char> read_file(const std::string &fname);
 
 private:
+    struct UniformBufferObject {
+        glm::uvec2 resolution;
+        glm::vec2 center;
+        glm::float32 zoom;
+    };
+
+    struct UniformBufferObject       ubo;
     GLFWwindow                       *window         = nullptr;
 
     vk::raii::Context                context;

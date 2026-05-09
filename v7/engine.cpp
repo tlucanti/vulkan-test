@@ -30,12 +30,6 @@ static const std::vector<const char *> g_validation_layers = {
 #endif
 };
 
-struct UniformBufferObject {
-    glm::uvec2 resolution;
-    glm::vec2 center;
-    glm::float32 zoom;
-};
-
 void Engine::run(void)
 {
     init_window();
@@ -702,12 +696,57 @@ void Engine::cleanup_swapchain(void)
     this->swapchain = nullptr;
 }
 
+bool Engine::process_input(void)
+{
+    constexpr float zoom_step = 1.01f;
+    const float move_step = 0.01f / this->ubo.zoom;
+    bool press = false;
+
+    if (glfwGetKey(this->window, GLFW_KEY_W) == GLFW_PRESS) {
+        this->ubo.center.y += move_step;
+        press = true;
+    }
+
+    if (glfwGetKey(this->window, GLFW_KEY_S) == GLFW_PRESS) {
+        this->ubo.center.y -= move_step;
+        press = true;
+    }
+
+    if (glfwGetKey(this->window, GLFW_KEY_A) == GLFW_PRESS) {
+        this->ubo.center.x += move_step;
+        press = true;
+    }
+
+    if (glfwGetKey(this->window, GLFW_KEY_D) == GLFW_PRESS) {
+        this->ubo.center.x -= move_step;
+        press = true;
+    }
+
+    if (glfwGetKey(this->window, GLFW_KEY_EQUAL) == GLFW_PRESS) {
+        this->ubo.zoom *= zoom_step;
+        press = true;
+    }
+
+    if (glfwGetKey(this->window, GLFW_KEY_MINUS) == GLFW_PRESS) {
+        this->ubo.zoom /= zoom_step;
+        press = true;
+    }
+
+    return press;
+}
+
 void Engine::main_loop(void)
 {
     uint32_t current_frame = 0;
 
+    this->ubo.resolution = glm::uvec2(WIDTH, HEIGHT);
+    this->ubo.center = glm::vec2(1.0f, 0.0f);
+    this->ubo.zoom = 1.0f;
+
     while (not glfwWindowShouldClose(this->window)) {
         glfwPollEvents();
+
+        process_input();
         draw_frame(current_frame);
         current_frame = (current_frame + 1) % CONFIG_MAX_FRAMES_IN_FLIGHT;
     }
@@ -717,11 +756,7 @@ void Engine::main_loop(void)
 
 void Engine::update_uniform_buffer(int frame_idx)
 {
-    UniformBufferObject ubo;
-
-    ubo.center = glm::vec2(0.0f, 0.0f);
-    ubo.zoom = 1.0f;
-    ubo.resolution = glm::uvec2(this->swapchain_extent.width, this->swapchain_extent.height);
+    this->ubo.resolution = glm::uvec2(this->swapchain_extent.width, this->swapchain_extent.height);
 
     memcpy(this->uniform_buffers_map.at(frame_idx), &ubo, sizeof(UniformBufferObject));
 }
