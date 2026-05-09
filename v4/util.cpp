@@ -17,14 +17,14 @@ std::pair<vk::raii::Buffer, vk::raii::DeviceMemory> Engine::create_buffer(
         vk::MemoryPropertyFlags properties
     )
 {
-    vk::BufferCreateInfo buffer_info = vk::BufferCreateInfo(
+    vk::BufferCreateInfo buffer_info(
         {},
         size,
         usage,
         vk::SharingMode::eExclusive
     );
 
-    vk::raii::Buffer buffer = vk::raii::Buffer(dev, buffer_info);
+    vk::raii::Buffer buffer(dev, buffer_info);
 
     vk::MemoryRequirements mem_req = buffer.getMemoryRequirements();
     uint32_t type_index = find_memory_type(

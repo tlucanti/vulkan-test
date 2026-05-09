@@ -452,7 +452,7 @@ void Engine::copy_buffer(
         1
     );
 
-    vk::raii::CommandBuffers cb = vk::raii::CommandBuffers(this->device, alloc_info);
+    vk::raii::CommandBuffers cb(this->device, alloc_info);
 
     vk::CommandBufferBeginInfo begin_info(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
     cb.front().begin(begin_info);
