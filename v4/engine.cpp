@@ -1,5 +1,6 @@
 
 #include "vulkan/vulkan.hpp"
+#include "vulkan/vulkan_raii.hpp"
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
@@ -72,8 +73,8 @@ void Engine::init_vulkan(void)
     create_swapchain();
     create_image_views();
     create_graphics_pipeline();
-    create_vertex_buffer();
     create_command_pool();
+    create_vertex_buffer();
     create_command_buffers();
     create_sync_objects();
     create_swapchain_sync_objects();
@@ -439,31 +440,61 @@ void Engine::create_graphics_pipeline(void)
     this->pipeline = vk::raii::Pipeline(this->device, nullptr, pipeline_create_info);
 }
 
+void Engine::copy_buffer(
+        vk::raii::Buffer &dst,
+        vk::raii::Buffer &src,
+        vk::DeviceSize size
+    )
+{
+    vk::CommandBufferAllocateInfo alloc_info(
+        this->command_pool,
+        vk::CommandBufferLevel::ePrimary,
+        1
+    );
+
+    vk::raii::CommandBuffers cb = vk::raii::CommandBuffers(this->device, alloc_info);
+
+    vk::CommandBufferBeginInfo begin_info(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
+    cb.front().begin(begin_info);
+
+    cb.front().copyBuffer(*src, *dst, vk::BufferCopy(0, 0, size));
+
+    cb.front().end();
+
+    vk::SubmitInfo submit_info(
+        {},
+        {},
+        { *cb.front() }
+    );
+    this->queue.submit(submit_info);
+    this->queue.waitIdle();
+}
+
 void Engine::create_vertex_buffer(void)
 {
-    vk::BufferCreateInfo buffer_info = vk::BufferCreateInfo(
-        {},
-        sizeof(g_vertices[0]) * g_vertices.size(),
-        vk::BufferUsageFlagBits::eVertexBuffer,
-        vk::SharingMode::eExclusive
-    );
+    vk::DeviceSize size = sizeof(g_vertices[0]) * g_vertices.size();
 
-    this->vertex_buffer = vk::raii::Buffer(this->device, buffer_info);
-
-    vk::MemoryRequirements mem_req = this->vertex_buffer.getMemoryRequirements();
-    uint32_t type_index = find_memory_type(
+    auto [staging_buffer, staging_buffer_mem] = create_buffer(
         this->physical_device,
-        mem_req.memoryTypeBits,
+        this->device,
+        size,
+        vk::BufferUsageFlagBits::eTransferSrc,
         vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
     );
-    vk::MemoryAllocateInfo alloc_info(mem_req.size, type_index);
 
-    this->vertex_buffer_memory = vk::raii::DeviceMemory(this->device, alloc_info);
-    this->vertex_buffer.bindMemory(*this->vertex_buffer_memory, 0);
+    void *ptr = staging_buffer_mem.mapMemory(0, size);
+    memcpy(ptr, g_vertices.data(), size);
+    staging_buffer_mem.unmapMemory();
 
-    void *ptr = this->vertex_buffer_memory.mapMemory(0, buffer_info.size);
-    memcpy(ptr, g_vertices.data(), buffer_info.size);
-    this->vertex_buffer_memory.unmapMemory();
+    std::tie(this->vertex_buffer, this->vertex_buffer_mem) = create_buffer(
+        this->physical_device,
+        this->device,
+        size,
+        vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst,
+        vk::MemoryPropertyFlagBits::eDeviceLocal
+    );
+
+    copy_buffer(this->vertex_buffer, staging_buffer, size);
 }
 
 void Engine::create_command_pool(void)

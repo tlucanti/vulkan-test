@@ -33,6 +33,7 @@ private:
 
         void create_graphics_pipeline(void);
 
+        void copy_buffer(vk::raii::Buffer &dst, vk::raii::Buffer &src, vk::DeviceSize size);
         void create_vertex_buffer(void);
 
         void create_command_pool(void);
@@ -53,6 +54,15 @@ private:
     void cleanup(void);
 
     // util functions
+    [[nodiscard]]
+    static std::pair<vk::raii::Buffer, vk::raii::DeviceMemory> create_buffer(
+        const vk::raii::PhysicalDevice &pd,
+        const vk::raii::Device &dev,
+        vk::DeviceSize size,
+        vk::BufferUsageFlags usage,
+        vk::MemoryPropertyFlags properties
+    );
+
     [[nodiscard]]
     static uint32_t find_memory_type(
         const vk::raii::PhysicalDevice &pd,
@@ -146,8 +156,8 @@ private:
     vk::raii::PipelineLayout         pipeline_layout = nullptr;
     vk::raii::Pipeline               pipeline        = nullptr;
 
-    vk::raii::Buffer                 vertex_buffer        = nullptr;
-    vk::raii::DeviceMemory           vertex_buffer_memory = nullptr;
+    vk::raii::Buffer                 vertex_buffer     = nullptr;
+    vk::raii::DeviceMemory           vertex_buffer_mem = nullptr;
 
     vk::raii::CommandPool            command_pool    = nullptr;
     std::vector<vk::raii::CommandBuffer> command_buffers;
