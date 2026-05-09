@@ -218,6 +218,10 @@ int Engine::get_physical_device_score(const vk::raii::PhysicalDevice &pd)
         return NOT_SUTABLE;
     }
 
+    if (not features.shaderFloat64) {
+        return NOT_SUTABLE;
+    }
+
     if (std::ranges::none_of(queue_families,
                              [](const vk::QueueFamilyProperties &qfp) {
                                  return (qfp.queueFlags & vk::QueueFlagBits::eGraphics) != vk::QueueFlagBits{};

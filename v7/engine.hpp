@@ -142,10 +142,17 @@ private:
     static std::vector<char> read_file(const std::string &fname);
 
 private:
+    struct Double2 {
+        double x;
+        double y;
+    };
+
     struct UniformBufferObject {
         glm::uvec2 resolution;
-        glm::vec2 center;
-        glm::float32 zoom;
+        glm::uvec2 resolution_padding;
+        Double2    center;
+        double     zoom;
+        double     zoom_padding;
     };
 
     struct UniformBufferObject       ubo;

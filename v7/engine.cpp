@@ -214,7 +214,7 @@ void Engine::create_logical_device(void)
                        vk::PhysicalDeviceVulkan11Features,
                        vk::PhysicalDeviceVulkan13Features,
                        vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT> feature_chain = {
-        vk::PhysicalDeviceFeatures2(),
+        vk::PhysicalDeviceFeatures2().features.setShaderFloat64(true),
         vk::PhysicalDeviceVulkan11Features()
             .setShaderDrawParameters(true),
         vk::PhysicalDeviceVulkan13Features()
@@ -698,8 +698,8 @@ void Engine::cleanup_swapchain(void)
 
 bool Engine::process_input(void)
 {
-    constexpr float zoom_step = 1.01f;
-    const float move_step = 0.01f / this->ubo.zoom;
+    constexpr double zoom_step = 1.01;
+    const double move_step = 0.01 / this->ubo.zoom;
     bool press = false;
 
     if (glfwGetKey(this->window, GLFW_KEY_W) == GLFW_PRESS) {
@@ -740,8 +740,10 @@ void Engine::main_loop(void)
     uint32_t current_frame = 0;
 
     this->ubo.resolution = glm::uvec2(WIDTH, HEIGHT);
-    this->ubo.center = glm::vec2(1.0f, 0.0f);
-    this->ubo.zoom = 1.0f;
+    this->ubo.resolution_padding = glm::uvec2(0, 0);
+    this->ubo.center = { 1.0, 0.0 };
+    this->ubo.zoom = 1.0;
+    this->ubo.zoom_padding = 0.0;
 
     while (not glfwWindowShouldClose(this->window)) {
         glfwPollEvents();
@@ -757,6 +759,8 @@ void Engine::main_loop(void)
 void Engine::update_uniform_buffer(int frame_idx)
 {
     this->ubo.resolution = glm::uvec2(this->swapchain_extent.width, this->swapchain_extent.height);
+    this->ubo.resolution_padding = glm::uvec2(0, 0);
+    this->ubo.zoom_padding = 0.0;
 
     memcpy(this->uniform_buffers_map.at(frame_idx), &ubo, sizeof(UniformBufferObject));
 }
