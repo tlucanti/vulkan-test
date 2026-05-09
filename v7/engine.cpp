@@ -8,6 +8,7 @@
 #include <glm/glm.hpp>
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <iostream>
 #include <map>
@@ -56,6 +57,9 @@ void Engine::init_window(void)
         nullptr,
         nullptr
     );
+
+    glfwSetWindowUserPointer(this->window, this);
+    glfwSetScrollCallback(this->window, &Engine::scroll_callback);
 }
 
 void Engine::init_vulkan(void)
@@ -698,8 +702,8 @@ void Engine::cleanup_swapchain(void)
 
 bool Engine::process_input(void)
 {
-    constexpr double zoom_step = 1.01;
-    constexpr float iter_step = 1.05;
+    constexpr double zoom_step = 1.02;
+    constexpr float iter_step = 1.02;
     const double move_step = 0.01 / this->ubo.zoom;
     bool press = false;
 
@@ -745,7 +749,63 @@ bool Engine::process_input(void)
         press = true;
     }
 
+    int mouse_state = glfwGetMouseButton(this->window, GLFW_MOUSE_BUTTON_LEFT);
+    double cursor_x = 0.0;
+    double cursor_y = 0.0;
+
+    glfwGetCursorPos(this->window, &cursor_x, &cursor_y);
+
+    if (mouse_state == GLFW_PRESS) {
+        if (!this->mouse_dragging) {
+            this->mouse_dragging = true;
+            this->last_cursor_x = cursor_x;
+            this->last_cursor_y = cursor_y;
+        } else {
+            const double dx = cursor_x - this->last_cursor_x;
+            const double dy = cursor_y - this->last_cursor_y;
+            const double pan_step = 2.0 / static_cast<double>(this->swapchain_extent.height) / this->ubo.zoom;
+
+            if (dx != 0.0 || dy != 0.0) {
+                this->ubo.center.x += dx * pan_step;
+                this->ubo.center.y += dy * pan_step;
+                this->last_cursor_x = cursor_x;
+                this->last_cursor_y = cursor_y;
+                press = true;
+            }
+        }
+    } else {
+        this->mouse_dragging = false;
+    }
+
+    if (this->pending_scroll_y != 0.0) {
+        const double old_zoom = this->ubo.zoom;
+        const double new_zoom = std::clamp(
+            this->ubo.zoom * std::pow(zoom_step, this->pending_scroll_y),
+            1e-6,
+            1e6
+        );
+        const double aspect = static_cast<double>(this->swapchain_extent.width) / static_cast<double>(this->swapchain_extent.height);
+        const double scaled_x = (cursor_x / static_cast<double>(this->swapchain_extent.width) * 2.0 - 1.0) * aspect;
+        const double scaled_y = cursor_y / static_cast<double>(this->swapchain_extent.height) * 2.0 - 1.0;
+
+        this->ubo.center.x += scaled_x * (1.0 / new_zoom - 1.0 / old_zoom);
+        this->ubo.center.y += scaled_y * (1.0 / new_zoom - 1.0 / old_zoom);
+        this->ubo.zoom = new_zoom;
+        this->pending_scroll_y = 0.0;
+        press = true;
+    }
+
     return press;
+}
+
+void Engine::scroll_callback(GLFWwindow *window, double /*xoffset*/, double yoffset)
+{
+    auto *engine = static_cast<Engine *>(glfwGetWindowUserPointer(window));
+    if (engine == nullptr) {
+        return;
+    }
+
+    engine->pending_scroll_y += yoffset;
 }
 
 void Engine::main_loop(void)
@@ -759,6 +819,7 @@ void Engine::main_loop(void)
     this->ubo.zoom_padding = 0.0;
     this->ubo.iter = 50;
 
+    draw_frame(0);
     while (not glfwWindowShouldClose(this->window)) {
         glfwPollEvents();
 

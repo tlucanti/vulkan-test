@@ -7,7 +7,7 @@ VK_SDK	?= $(PWD)/../vulkan-sdk/
 SLANGC  ?= $(VK_SDK)/x86_64/bin/slangc
 
 CXXFLAGS  =				\
-	-O0 -g3				\
+	-O3				\
 	-std=c++23			\
 	-I $(VK_SDK)/x86_64/include/	\
 	-L $(VK_SDK)/lib		\
@@ -44,6 +44,7 @@ $(NAME): $(DEP)
 
 shader.spv: Makefile shader.slang
 	$(SLANGC) \
+		-O3 \
 		shader.slang \
 		-profile spirv_1_4 \
 		-emit-spirv-directly \

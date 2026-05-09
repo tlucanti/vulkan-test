@@ -59,6 +59,7 @@ private:
         void update_uniform_buffer(int frame_idx);
         void draw_frame(int frame_idx);
         bool process_input(void);
+        static void scroll_callback(GLFWwindow *window, double xoffset, double yoffset);
 
     void cleanup(void);
 
@@ -158,6 +159,10 @@ private:
 
     struct UniformBufferObject       ubo;
     GLFWwindow                       *window         = nullptr;
+    bool                             mouse_dragging  = false;
+    double                           last_cursor_x   = 0.0;
+    double                           last_cursor_y   = 0.0;
+    double                           pending_scroll_y = 0.0;
 
     vk::raii::Context                context;
     vk::raii::Instance               instance        = nullptr;
