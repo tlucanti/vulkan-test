@@ -166,12 +166,6 @@ private:
     vk::raii::PipelineLayout         pipeline_layout   = nullptr;
     vk::raii::Pipeline               pipeline          = nullptr;
 
-    vk::raii::Buffer                 vertex_buffer     = nullptr;
-    vk::raii::DeviceMemory           vertex_buffer_mem = nullptr;
-
-    vk::raii::Buffer                 index_buffer      = nullptr;
-    vk::raii::DeviceMemory           index_buffer_mem  = nullptr;
-
     std::vector<vk::raii::Buffer>       uniform_buffers;
     std::vector<vk::raii::DeviceMemory> uniform_buffers_mem;
     std::vector<void *>                 uniform_buffers_map;

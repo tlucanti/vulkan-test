@@ -6,10 +6,8 @@
 #include <GLFW/glfw3.h>
 
 #include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
 
 #include <algorithm>
-#include <chrono>
 #include <cstring>
 #include <iostream>
 #include <map>
@@ -18,7 +16,6 @@
 #include <vector>
 
 #include "engine.hpp"
-#include "vertex.hpp"
 
 using namespace std::string_literals;
 
@@ -38,18 +35,6 @@ struct UniformBufferObject {
     glm::mat4 view;
     glm::mat4 proj;
 };
-
-static const std::vector<Vertex> g_vertices = {
-    {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-    {{ 0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
-    {{ 0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}},
-    {{-0.5f,  0.5f}, {1.0f, 1.0f, 1.0f}},
-};
-
-static const std::vector<uint16_t> g_indices = {
-    0, 1, 2, 2, 3, 0,
-};
-
 
 void Engine::run(void)
 {
@@ -91,8 +76,6 @@ void Engine::init_vulkan(void)
     create_descriptor_set_layout();
     create_graphics_pipeline();
     create_command_pool();
-    create_vertex_buffer();
-    create_index_buffer();
     create_uniform_buffers();
     create_command_buffers();
     create_descriptor_pool();
@@ -367,13 +350,7 @@ void Engine::create_graphics_pipeline(void)
     };
 
     // vertex input state
-    auto binding_description = Vertex::get_binding_description();
-    auto attribute_descriptions = Vertex::get_attribute_descriptions();
-    vk::PipelineVertexInputStateCreateInfo vertex_input(
-        {},
-        { binding_description },
-        attribute_descriptions
-    );
+    vk::PipelineVertexInputStateCreateInfo vertex_input;
 
     // input assembly state
     vk::PipelineInputAssemblyStateCreateInfo assembler(
@@ -396,7 +373,7 @@ void Engine::create_graphics_pipeline(void)
         vk::False,
         vk::PolygonMode::eFill,
         vk::CullModeFlagBits::eBack,
-        vk::FrontFace::eCounterClockwise,
+        vk::FrontFace::eClockwise,
         vk::False,
         0,
         0,
@@ -482,90 +459,6 @@ void Engine::create_graphics_pipeline(void)
     );
 
     this->pipeline = vk::raii::Pipeline(this->device, nullptr, pipeline_create_info);
-}
-
-void Engine::copy_buffer(
-        vk::raii::Buffer &dst,
-        vk::raii::Buffer &src,
-        vk::DeviceSize size
-    )
-{
-    vk::CommandBufferAllocateInfo alloc_info(
-        this->command_pool,
-        vk::CommandBufferLevel::ePrimary,
-        1
-    );
-
-    vk::raii::CommandBuffers cb(this->device, alloc_info);
-
-    vk::CommandBufferBeginInfo begin_info(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
-    cb.front().begin(begin_info);
-
-    cb.front().copyBuffer(*src, *dst, vk::BufferCopy(0, 0, size));
-
-    cb.front().end();
-
-    vk::SubmitInfo submit_info(
-        {},
-        {},
-        { *cb.front() }
-    );
-    this->queue.submit(submit_info);
-    this->queue.waitIdle();
-}
-
-void Engine::create_vertex_buffer(void)
-{
-    vk::DeviceSize size = sizeof(g_vertices[0]) * g_vertices.size();
-
-    auto [staging_buffer, staging_buffer_mem] = create_buffer(
-        this->physical_device,
-        this->device,
-        size,
-        vk::BufferUsageFlagBits::eTransferSrc,
-        vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
-    );
-
-    void *ptr = staging_buffer_mem.mapMemory(0, size);
-    memcpy(ptr, g_vertices.data(), size);
-    staging_buffer_mem.unmapMemory();
-
-    std::tie(this->vertex_buffer, this->vertex_buffer_mem) = create_buffer(
-        this->physical_device,
-        this->device,
-        size,
-        vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst,
-        vk::MemoryPropertyFlagBits::eDeviceLocal
-    );
-
-    copy_buffer(this->vertex_buffer, staging_buffer, size);
-}
-
-void Engine::create_index_buffer(void)
-{
-    vk::DeviceSize size = sizeof(g_indices[0]) * g_indices.size();
-
-    auto [staging_buffer, staging_buffer_mem] = create_buffer(
-        this->physical_device,
-        this->device,
-        size,
-        vk::BufferUsageFlagBits::eTransferSrc,
-        vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
-    );
-
-    void *ptr = staging_buffer_mem.mapMemory(0, size);
-    memcpy(ptr, g_indices.data(), size);
-    staging_buffer_mem.unmapMemory();
-
-    std::tie(this->index_buffer, this->index_buffer_mem) = create_buffer(
-        this->physical_device,
-        this->device,
-        size,
-        vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst,
-        vk::MemoryPropertyFlagBits::eDeviceLocal
-    );
-
-    copy_buffer(this->index_buffer, staging_buffer, size);
 }
 
 void Engine::create_uniform_buffers(void)
@@ -654,18 +547,10 @@ void Engine::record_command_buffer(uint32_t image_index, uint32_t frame_index)
     );
 
     // bind vertex buffer
-    this->command_buffers.at(frame_index).bindVertexBuffers(
-        0,
-        { this->vertex_buffer },
-        { 0 }
-    );
+    // (skipped)
 
     // bind index buffer
-    this->command_buffers.at(frame_index).bindIndexBuffer(
-        this->index_buffer,
-        0,
-        vk::IndexType::eUint16
-    );
+    // (skipped)
 
     // bind descriptor sets
     this->command_buffers.at(frame_index).bindDescriptorSets(
@@ -694,10 +579,9 @@ void Engine::record_command_buffer(uint32_t image_index, uint32_t frame_index)
     );
 
     // draw
-    this->command_buffers.at(frame_index).drawIndexed(
-        g_indices.size(),
+    this->command_buffers.at(frame_index).draw(
+        3,
         1,
-        0,
         0,
         0
     );
@@ -833,29 +717,7 @@ void Engine::main_loop(void)
 
 void Engine::update_uniform_buffer(int frame_idx)
 {
-    static auto start = std::chrono::high_resolution_clock::now();
-
-    auto now = std::chrono::high_resolution_clock::now();
-    float time = std::chrono::duration<float>(now - start).count();
-
     UniformBufferObject ubo;
-    ubo.model = glm::rotate(
-        glm::mat4(1.0f),
-        time * glm::radians(90.0f),
-        glm::vec3(0.0f, 0.0f, 1.0f)
-    );
-    ubo.view = glm::lookAt(
-        glm::vec3(2.0f, 2.0f, 2.0f),
-        glm::vec3(0.0f, 0.0f, 0.0f),
-        glm::vec3(0.0f, 0.0f, 1.0f)
-    );
-    ubo.proj = glm::perspective(
-        glm::radians(45.0f),
-        static_cast<float>(this->swapchain_extent.width) / this->swapchain_extent.height,
-        0.1f,
-        10.0f
-    );
-    ubo.proj[1][1] *= -1;
 
     memcpy(this->uniform_buffers_map.at(frame_idx), &ubo, sizeof(UniformBufferObject));
 }
@@ -916,4 +778,3 @@ void Engine::cleanup(void)
     glfwDestroyWindow(this->window);
     glfwTerminate();
 }
-
