@@ -31,11 +31,15 @@ private:
         void create_swapchain(void);
         void create_image_views(void);
 
+        void create_descriptor_set_layout(void);
+        void create_descriptor_pool(void);
+        void create_descriptor_sets(void);
         void create_graphics_pipeline(void);
 
         void copy_buffer(vk::raii::Buffer &dst, vk::raii::Buffer &src, vk::DeviceSize size);
         void create_vertex_buffer(void);
         void create_index_buffer(void);
+        void create_uniform_buffers(void);
 
         void create_command_pool(void);
         void create_command_buffers(void);
@@ -50,6 +54,7 @@ private:
 
     // main loop functions
     void main_loop(void);
+        void update_uniform_buffer(int frame_idx);
         void draw_frame(int frame_idx);
 
     void cleanup(void);
@@ -154,14 +159,22 @@ private:
     std::vector<vk::Image>           swapchain_images;
     std::vector<vk::raii::ImageView> swapchain_image_views;
 
-    vk::raii::PipelineLayout         pipeline_layout = nullptr;
-    vk::raii::Pipeline               pipeline        = nullptr;
+    vk::raii::DescriptorSetLayout    descriptor_layout = nullptr;
+    vk::raii::DescriptorPool         descriptor_pool   = nullptr;
+    std::vector<vk::raii::DescriptorSet> descriptor_sets;
+
+    vk::raii::PipelineLayout         pipeline_layout   = nullptr;
+    vk::raii::Pipeline               pipeline          = nullptr;
 
     vk::raii::Buffer                 vertex_buffer     = nullptr;
     vk::raii::DeviceMemory           vertex_buffer_mem = nullptr;
 
     vk::raii::Buffer                 index_buffer      = nullptr;
     vk::raii::DeviceMemory           index_buffer_mem  = nullptr;
+
+    std::vector<vk::raii::Buffer>       uniform_buffers;
+    std::vector<vk::raii::DeviceMemory> uniform_buffers_mem;
+    std::vector<void *>                 uniform_buffers_map;
 
     vk::raii::CommandPool            command_pool    = nullptr;
     std::vector<vk::raii::CommandBuffer> command_buffers;

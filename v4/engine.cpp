@@ -1,10 +1,15 @@
 
 #include "vulkan/vulkan.hpp"
 #include "vulkan/vulkan_raii.hpp"
+
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+
 #include <algorithm>
+#include <chrono>
 #include <cstring>
 #include <iostream>
 #include <map>
@@ -26,6 +31,12 @@ static const std::vector<const char *> g_validation_layers = {
 #if CONFIG_VALIDATION_LAYERS
     "VK_LAYER_KHRONOS_validation",
 #endif
+};
+
+struct UniformBufferObject {
+    glm::mat4 model;
+    glm::mat4 view;
+    glm::mat4 proj;
 };
 
 static const std::vector<Vertex> g_vertices = {
@@ -77,11 +88,15 @@ void Engine::init_vulkan(void)
     create_logical_device();
     create_swapchain();
     create_image_views();
+    create_descriptor_set_layout();
     create_graphics_pipeline();
     create_command_pool();
     create_vertex_buffer();
     create_index_buffer();
+    create_uniform_buffers();
     create_command_buffers();
+    create_descriptor_pool();
+    create_descriptor_sets();
     create_sync_objects();
     create_swapchain_sync_objects();
 }
@@ -313,6 +328,22 @@ void Engine::create_image_views(void)
     }
 }
 
+void Engine::create_descriptor_set_layout(void)
+{
+    vk::DescriptorSetLayoutBinding ubo_binding(
+        0,
+        vk::DescriptorType::eUniformBuffer,
+        1,
+        vk::ShaderStageFlagBits::eVertex
+    );
+
+    vk::DescriptorSetLayoutCreateInfo layout_info(
+        {},
+        { ubo_binding }
+    );
+    this->descriptor_layout = vk::raii::DescriptorSetLayout(this->device, layout_info);
+}
+
 void Engine::create_graphics_pipeline(void)
 {
     vk::raii::ShaderModule shader_module = create_shader_module(this->device, read_file(SHADER_SPV_PATH));
@@ -365,7 +396,7 @@ void Engine::create_graphics_pipeline(void)
         vk::False,
         vk::PolygonMode::eFill,
         vk::CullModeFlagBits::eBack,
-        vk::FrontFace::eClockwise,
+        vk::FrontFace::eCounterClockwise,
         vk::False,
         0,
         0,
@@ -413,8 +444,15 @@ void Engine::create_graphics_pipeline(void)
     );
 
     // pipeline layout
-    vk::PipelineLayoutCreateInfo pipeline_layout_create_info;
-    this->pipeline_layout = vk::raii::PipelineLayout(this->device, pipeline_layout_create_info);
+    vk::PipelineLayoutCreateInfo pipeline_layout_create_info(
+        {},
+        { *this->descriptor_layout },
+        {}
+    );
+    this->pipeline_layout = vk::raii::PipelineLayout(
+        this->device,
+        pipeline_layout_create_info
+    );
 
     // pipeline rendering
     vk::PipelineRenderingCreateInfo pipeline_rendering(
@@ -530,6 +568,27 @@ void Engine::create_index_buffer(void)
     copy_buffer(this->index_buffer, staging_buffer, size);
 }
 
+void Engine::create_uniform_buffers(void)
+{
+    this->uniform_buffers.clear();
+
+    for (int i = 0; i < CONFIG_MAX_FRAMES_IN_FLIGHT; i++) {
+        vk::DeviceSize size = sizeof(UniformBufferObject);
+
+        auto [buffer, buffer_mem] = create_buffer(
+            this->physical_device,
+            this->device,
+            size,
+            vk::BufferUsageFlagBits::eUniformBuffer,
+            vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
+        );
+
+        this->uniform_buffers_map.emplace_back(std::move(buffer_mem.mapMemory(0, size)));
+        this->uniform_buffers.emplace_back(std::move(buffer));
+        this->uniform_buffers_mem.emplace_back(std::move(buffer_mem));
+    }
+}
+
 void Engine::create_command_pool(void)
 {
     vk::CommandPoolCreateInfo create_info(
@@ -608,6 +667,15 @@ void Engine::record_command_buffer(uint32_t image_index, uint32_t frame_index)
         vk::IndexType::eUint16
     );
 
+    // bind descriptor sets
+    this->command_buffers.at(frame_index).bindDescriptorSets(
+        vk::PipelineBindPoint::eGraphics,
+        this->pipeline_layout,
+        0,
+        *this->descriptor_sets.at(frame_index),
+        {}
+    );
+
     // set dynamic states
     this->command_buffers.at(frame_index).setViewport(
         0,
@@ -651,6 +719,59 @@ void Engine::record_command_buffer(uint32_t image_index, uint32_t frame_index)
 
     // end command buffer
     this->command_buffers.at(frame_index).end();
+}
+
+void Engine::create_descriptor_pool(void)
+{
+    vk::DescriptorPoolSize pool_size(
+        vk::DescriptorType::eUniformBuffer,
+        CONFIG_MAX_FRAMES_IN_FLIGHT
+    );
+
+    vk::DescriptorPoolCreateInfo pool_info(
+        vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
+        CONFIG_MAX_FRAMES_IN_FLIGHT,
+        { pool_size }
+    );
+
+    this->descriptor_pool = vk::raii::DescriptorPool(this->device, pool_info);
+}
+
+void Engine::create_descriptor_sets(void)
+{
+    std::vector<vk::DescriptorSetLayout> layouts(
+        CONFIG_MAX_FRAMES_IN_FLIGHT,
+        *this->descriptor_layout
+    );
+
+    vk::DescriptorSetAllocateInfo set_info(
+        this->descriptor_pool,
+        layouts
+    );
+
+    this->descriptor_sets = this->device.allocateDescriptorSets(set_info);
+
+    std::vector<vk::DescriptorBufferInfo> buffer_infos(CONFIG_MAX_FRAMES_IN_FLIGHT);
+    std::vector<vk::WriteDescriptorSet> descriptor_writes(CONFIG_MAX_FRAMES_IN_FLIGHT);
+
+    for (int i = 0; i < CONFIG_MAX_FRAMES_IN_FLIGHT; i++) {
+        buffer_infos.at(i) = vk::DescriptorBufferInfo(
+            this->uniform_buffers.at(i),
+            0,
+            sizeof(UniformBufferObject)
+        );
+
+        descriptor_writes.at(i) = vk::WriteDescriptorSet(
+            this->descriptor_sets.at(i),
+            0,
+            0,
+            vk::DescriptorType::eUniformBuffer,
+            {},
+            { buffer_infos.at(i) }
+        );
+    }
+
+    this->device.updateDescriptorSets({descriptor_writes}, {});
 }
 
 void Engine::create_sync_objects(void)
@@ -710,8 +831,39 @@ void Engine::main_loop(void)
     this->device.waitIdle();
 }
 
+void Engine::update_uniform_buffer(int frame_idx)
+{
+    static auto start = std::chrono::high_resolution_clock::now();
+
+    auto now = std::chrono::high_resolution_clock::now();
+    float time = std::chrono::duration<float>(now - start).count();
+
+    UniformBufferObject ubo;
+    ubo.model = glm::rotate(
+        glm::mat4(1.0f),
+        time * glm::radians(90.0f),
+        glm::vec3(0.0f, 0.0f, 1.0f)
+    );
+    ubo.view = glm::lookAt(
+        glm::vec3(2.0f, 2.0f, 2.0f),
+        glm::vec3(0.0f, 0.0f, 0.0f),
+        glm::vec3(0.0f, 0.0f, 1.0f)
+    );
+    ubo.proj = glm::perspective(
+        glm::radians(45.0f),
+        static_cast<float>(this->swapchain_extent.width) / this->swapchain_extent.height,
+        0.1f,
+        10.0f
+    );
+    ubo.proj[1][1] *= -1;
+
+    memcpy(this->uniform_buffers_map.at(frame_idx), &ubo, sizeof(UniformBufferObject));
+}
+
 void Engine::draw_frame(int frame_idx)
 {
+    update_uniform_buffer(frame_idx);
+
     auto [result, image_index] = this->swapchain.acquireNextImage(
         UINT64_MAX,
         present_complete.at(frame_idx),
