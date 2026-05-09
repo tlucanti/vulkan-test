@@ -7,6 +7,7 @@
 
 #include <GLFW/glfw3.h>
 
+#include <chrono>
 #include <string>
 #include <vector>
 
@@ -33,10 +34,6 @@ private:
 
         void create_graphics_pipeline(void);
 
-        void copy_buffer(vk::raii::Buffer &dst, vk::raii::Buffer &src, vk::DeviceSize size);
-        void create_vertex_buffer(void);
-        void create_index_buffer(void);
-
         void create_command_pool(void);
         void create_command_buffers(void);
         void record_command_buffer(uint32_t image_index, uint32_t frame_index);
@@ -56,19 +53,9 @@ private:
 
     // util functions
     [[nodiscard]]
-    static std::pair<vk::raii::Buffer, vk::raii::DeviceMemory> create_buffer(
-        const vk::raii::PhysicalDevice &pd,
+    static vk::raii::ShaderModule create_shader_module(
         const vk::raii::Device &dev,
-        vk::DeviceSize size,
-        vk::BufferUsageFlags usage,
-        vk::MemoryPropertyFlags properties
-    );
-
-    [[nodiscard]]
-    static uint32_t find_memory_type(
-        const vk::raii::PhysicalDevice &pd,
-        uint32_t typeFileter,
-        vk::MemoryPropertyFlags properties
+        const std::vector<char> &shader_code
     );
 
     static void transition_image_layout(
@@ -80,12 +67,6 @@ private:
         vk::AccessFlags2 dst_access_mask,
         vk::PipelineStageFlags2 src_stage_mask,
         vk::PipelineStageFlags2 dst_stage_mask
-    );
-
-    [[nodiscard]]
-    static vk::raii::ShaderModule create_shader_module(
-        const vk::raii::Device &dev,
-        const std::vector<char> &shader_code
     );
 
     [[nodiscard]]
@@ -135,6 +116,7 @@ private:
 
 private:
     GLFWwindow                       *window         = nullptr;
+    std::chrono::steady_clock::time_point start_time{};
 
     vk::raii::Context                context;
     vk::raii::Instance               instance        = nullptr;
@@ -156,12 +138,6 @@ private:
 
     vk::raii::PipelineLayout         pipeline_layout = nullptr;
     vk::raii::Pipeline               pipeline        = nullptr;
-
-    vk::raii::Buffer                 vertex_buffer     = nullptr;
-    vk::raii::DeviceMemory           vertex_buffer_mem = nullptr;
-
-    vk::raii::Buffer                 index_buffer      = nullptr;
-    vk::raii::DeviceMemory           index_buffer_mem  = nullptr;
 
     vk::raii::CommandPool            command_pool    = nullptr;
     std::vector<vk::raii::CommandBuffer> command_buffers;

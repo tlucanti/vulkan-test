@@ -26,7 +26,6 @@ DEP	= Makefile \
 	  main.cpp \
 	  engine.cpp \
 	  engine.hpp \
-	  vertex.hpp \
 	  util.cpp \
 	  shader.spv
 

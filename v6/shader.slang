@@ -1,28 +1,30 @@
-
-struct VertexInput {
-    float2 position;
-    float3 color;
+[[vk::push_constant]]
+cbuffer ShadertoyUniforms
+{
+    float time;
 };
 
-struct VertexOutput {
-    float3 color;
-    float4 sv_position : SV_Position;
-};
+float4 main_image(float2 coord, float time)
+{
+    float2 p = coord * 0.01;
+    float3 color = 0.5 + 0.5 * cos(time + float3(p.x, p.y, p.x + p.y));
+    return float4(color, 1.0);
+}
 
 [shader("vertex")]
-VertexOutput vert_main(VertexInput input) {
-    VertexOutput output;
+float4 vert_main(uint vertex_id : SV_VertexID) : SV_Position
+{
+    float2 positions[3] = {
+        float2( 0.0f, -0.5f),
+        float2( 0.5f,  0.5f),
+        float2(-0.5f,  0.5f),
+    };
 
-    output.sv_position = float4(input.position, 0.0, 1.0);
-    output.color = input.color;
-
-    return output;
+    return float4(positions[vertex_id], 0.0, 1.0);
 }
 
 [shader("fragment")]
-float4 frag_main(VertexOutput in_vert) : SV_Target
+float4 frag_main(float4 sv_position : SV_Position) : SV_Target
 {
-    float3 color = in_vert.color;
-
-    return float4(color, 1.0);
+    return main_image(sv_position.xy, time);
 }

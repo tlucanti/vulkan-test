@@ -4,64 +4,6 @@
 #include <iostream>
 #include <fstream>
 
-static inline uint64_t BIT(uint64_t x)
-{
-    return 1 << x;
-}
-
-std::pair<vk::raii::Buffer, vk::raii::DeviceMemory> Engine::create_buffer(
-        const vk::raii::PhysicalDevice &pd,
-        const vk::raii::Device &dev,
-        vk::DeviceSize size,
-        vk::BufferUsageFlags usage,
-        vk::MemoryPropertyFlags properties
-    )
-{
-    vk::BufferCreateInfo buffer_info(
-        {},
-        size,
-        usage,
-        vk::SharingMode::eExclusive
-    );
-
-    vk::raii::Buffer buffer(dev, buffer_info);
-
-    vk::MemoryRequirements mem_req = buffer.getMemoryRequirements();
-    uint32_t type_index = find_memory_type(
-        pd,
-        mem_req.memoryTypeBits,
-        properties
-    );
-
-    vk::MemoryAllocateInfo alloc_info(mem_req.size, type_index);
-    vk::raii::DeviceMemory mem(dev, alloc_info);
-
-    buffer.bindMemory(*mem, 0);
-
-    return { std::move(buffer), std::move(mem) };
-}
-
-uint32_t Engine::find_memory_type(
-        const vk::raii::PhysicalDevice &pd,
-        uint32_t type_filter,
-        vk::MemoryPropertyFlags properties
-    )
-{
-    vk::PhysicalDeviceMemoryProperties mem_props = pd.getMemoryProperties();
-
-    for (uint32_t i = 0; i < mem_props.memoryTypeCount; i++) {
-        if ((type_filter & BIT(i)) == 0) {
-            continue;
-        }
-
-        if ((mem_props.memoryTypes[i].propertyFlags & properties) == properties) {
-            return i;
-        }
-    }
-
-    throw std::runtime_error("failed to find sutable memory type");
-}
-
 void Engine::transition_image_layout(
         vk::raii::CommandBuffer &cb,
         const vk::Image &current_frame,
@@ -206,15 +148,10 @@ int Engine::get_physical_device_score(const vk::raii::PhysicalDevice &pd)
     std::vector<vk::ExtensionProperties>   supp_extensions = pd.enumerateDeviceExtensionProperties();
     std::vector<vk::QueueFamilyProperties> queue_families  = pd.getQueueFamilyProperties();
     vk::PhysicalDeviceProperties           props           = pd.getProperties();
-    vk::PhysicalDeviceFeatures             features        = pd.getFeatures();
     int                                    score           = 0;
     constexpr int                          NOT_SUTABLE     = -1;
 
     if (props.apiVersion < vk::ApiVersion13) {
-        return NOT_SUTABLE;
-    }
-
-    if (not features.geometryShader) {
         return NOT_SUTABLE;
     }
 
@@ -247,9 +184,6 @@ std::vector<const char *> Engine::get_required_device_extensions(void)
 {
     return {
         vk::KHRSwapchainExtensionName,
-        vk::KHRSpirv14ExtensionName,
-        vk::KHRSynchronization2ExtensionName,
-        vk::KHRCreateRenderpass2ExtensionName,
     };
 }
 

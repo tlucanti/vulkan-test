@@ -5,6 +5,7 @@
 #include <GLFW/glfw3.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cstring>
 #include <iostream>
 #include <map>
@@ -13,7 +14,6 @@
 #include <vector>
 
 #include "engine.hpp"
-#include "vertex.hpp"
 
 using namespace std::string_literals;
 
@@ -21,27 +21,16 @@ using namespace std::string_literals;
 static constexpr uint32_t WIDTH = 800;
 static constexpr uint32_t HEIGHT = 600;
 static constexpr const char *SHADER_SPV_PATH = "./shader.spv";
-
 static const std::vector<const char *> g_validation_layers = {
 #if CONFIG_VALIDATION_LAYERS
     "VK_LAYER_KHRONOS_validation",
 #endif
 };
 
-static const std::vector<Vertex> g_vertices = {
-    {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-    {{ 0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
-    {{ 0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}},
-    {{-0.5f,  0.5f}, {1.0f, 1.0f, 1.0f}},
-};
-
-static const std::vector<uint16_t> g_indices = {
-    0, 1, 2, 2, 3, 0,
-};
-
 
 void Engine::run(void)
 {
+    this->start_time = std::chrono::steady_clock::now();
     init_window();
     init_vulkan();
     main_loop();
@@ -79,8 +68,6 @@ void Engine::init_vulkan(void)
     create_image_views();
     create_graphics_pipeline();
     create_command_pool();
-    create_vertex_buffer();
-    create_index_buffer();
     create_command_buffers();
     create_sync_objects();
     create_swapchain_sync_objects();
@@ -220,16 +207,13 @@ void Engine::create_logical_device(void)
 
     vk::StructureChain<vk::PhysicalDeviceFeatures2,
                        vk::PhysicalDeviceVulkan11Features,
-                       vk::PhysicalDeviceVulkan13Features,
-                       vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT> feature_chain = {
+                       vk::PhysicalDeviceVulkan13Features> feature_chain = {
         vk::PhysicalDeviceFeatures2(),
         vk::PhysicalDeviceVulkan11Features()
             .setShaderDrawParameters(true),
         vk::PhysicalDeviceVulkan13Features()
             .setSynchronization2(true)
             .setDynamicRendering(true),
-        vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT()
-            .setExtendedDynamicState(true),
     };
 
     vk::DeviceQueueCreateInfo queue_create_info(
@@ -336,13 +320,7 @@ void Engine::create_graphics_pipeline(void)
     };
 
     // vertex input state
-    auto binding_description = Vertex::get_binding_description();
-    auto attribute_descriptions = Vertex::get_attribute_descriptions();
-    vk::PipelineVertexInputStateCreateInfo vertex_input(
-        {},
-        { binding_description },
-        attribute_descriptions
-    );
+    vk::PipelineVertexInputStateCreateInfo vertex_input;
 
     // input assembly state
     vk::PipelineInputAssemblyStateCreateInfo assembler(
@@ -413,7 +391,13 @@ void Engine::create_graphics_pipeline(void)
     );
 
     // pipeline layout
+    vk::PushConstantRange time_push_constant_range(
+        vk::ShaderStageFlagBits::eFragment,
+        0,
+        sizeof(float)
+    );
     vk::PipelineLayoutCreateInfo pipeline_layout_create_info;
+    pipeline_layout_create_info.setPushConstantRanges({ time_push_constant_range });
     this->pipeline_layout = vk::raii::PipelineLayout(this->device, pipeline_layout_create_info);
 
     // pipeline rendering
@@ -446,90 +430,6 @@ void Engine::create_graphics_pipeline(void)
     this->pipeline = vk::raii::Pipeline(this->device, nullptr, pipeline_create_info);
 }
 
-void Engine::copy_buffer(
-        vk::raii::Buffer &dst,
-        vk::raii::Buffer &src,
-        vk::DeviceSize size
-    )
-{
-    vk::CommandBufferAllocateInfo alloc_info(
-        this->command_pool,
-        vk::CommandBufferLevel::ePrimary,
-        1
-    );
-
-    vk::raii::CommandBuffers cb(this->device, alloc_info);
-
-    vk::CommandBufferBeginInfo begin_info(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
-    cb.front().begin(begin_info);
-
-    cb.front().copyBuffer(*src, *dst, vk::BufferCopy(0, 0, size));
-
-    cb.front().end();
-
-    vk::SubmitInfo submit_info(
-        {},
-        {},
-        { *cb.front() }
-    );
-    this->queue.submit(submit_info);
-    this->queue.waitIdle();
-}
-
-void Engine::create_vertex_buffer(void)
-{
-    vk::DeviceSize size = sizeof(g_vertices[0]) * g_vertices.size();
-
-    auto [staging_buffer, staging_buffer_mem] = create_buffer(
-        this->physical_device,
-        this->device,
-        size,
-        vk::BufferUsageFlagBits::eTransferSrc,
-        vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
-    );
-
-    void *ptr = staging_buffer_mem.mapMemory(0, size);
-    memcpy(ptr, g_vertices.data(), size);
-    staging_buffer_mem.unmapMemory();
-
-    std::tie(this->vertex_buffer, this->vertex_buffer_mem) = create_buffer(
-        this->physical_device,
-        this->device,
-        size,
-        vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst,
-        vk::MemoryPropertyFlagBits::eDeviceLocal
-    );
-
-    copy_buffer(this->vertex_buffer, staging_buffer, size);
-}
-
-void Engine::create_index_buffer(void)
-{
-    vk::DeviceSize size = sizeof(g_indices[0]) * g_indices.size();
-
-    auto [staging_buffer, staging_buffer_mem] = create_buffer(
-        this->physical_device,
-        this->device,
-        size,
-        vk::BufferUsageFlagBits::eTransferSrc,
-        vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
-    );
-
-    void *ptr = staging_buffer_mem.mapMemory(0, size);
-    memcpy(ptr, g_indices.data(), size);
-    staging_buffer_mem.unmapMemory();
-
-    std::tie(this->index_buffer, this->index_buffer_mem) = create_buffer(
-        this->physical_device,
-        this->device,
-        size,
-        vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst,
-        vk::MemoryPropertyFlagBits::eDeviceLocal
-    );
-
-    copy_buffer(this->index_buffer, staging_buffer, size);
-}
-
 void Engine::create_command_pool(void)
 {
     vk::CommandPoolCreateInfo create_info(
@@ -553,6 +453,10 @@ void Engine::create_command_buffers(void)
 
 void Engine::record_command_buffer(uint32_t image_index, uint32_t frame_index)
 {
+    const float time = std::chrono::duration<float>(
+        std::chrono::steady_clock::now() - this->start_time
+    ).count();
+
     // begin command buffer
     this->command_buffers.at(frame_index).begin({});
 
@@ -594,18 +498,12 @@ void Engine::record_command_buffer(uint32_t image_index, uint32_t frame_index)
         this->pipeline
     );
 
-    // bind vertex buffer
-    this->command_buffers.at(frame_index).bindVertexBuffers(
+    // push the frame time so the shader can animate
+    this->command_buffers.at(frame_index).pushConstants<float>(
+        *this->pipeline_layout,
+        vk::ShaderStageFlagBits::eFragment,
         0,
-        { this->vertex_buffer },
-        { 0 }
-    );
-
-    // bind index buffer
-    this->command_buffers.at(frame_index).bindIndexBuffer(
-        this->index_buffer,
-        0,
-        vk::IndexType::eUint16
+        time
     );
 
     // set dynamic states
@@ -626,10 +524,9 @@ void Engine::record_command_buffer(uint32_t image_index, uint32_t frame_index)
     );
 
     // draw
-    this->command_buffers.at(frame_index).drawIndexed(
-        g_indices.size(),
+    this->command_buffers.at(frame_index).draw(
+        3,
         1,
-        0,
         0,
         0
     );
@@ -764,4 +661,3 @@ void Engine::cleanup(void)
     glfwDestroyWindow(this->window);
     glfwTerminate();
 }
-
