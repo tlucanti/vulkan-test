@@ -6,8 +6,12 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
+#define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb_image.h>
 
 #include <algorithm>
 #include <chrono>
@@ -15,7 +19,6 @@
 #include <iostream>
 #include <map>
 #include <stdexcept>
-#include <string>
 #include <vector>
 
 #include "engine.hpp"
@@ -36,10 +39,10 @@ struct UniformBufferObject {
 };
 
 static const std::vector<Vertex> g_vertices = {
-    {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-    {{ 0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
-    {{ 0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}},
-    {{-0.5f,  0.5f}, {1.0f, 1.0f, 1.0f}},
+    {{-0.5f, -0.5f}, {1.0f, 0.0f}},
+    {{ 0.5f, -0.5f}, {0.0f, 0.0f}},
+    {{ 0.5f,  0.5f}, {0.0f, 1.0f}},
+    {{-0.5f,  0.5f}, {1.0f, 1.0f}}
 };
 
 static const std::vector<uint16_t> g_indices = {
@@ -87,6 +90,9 @@ void Engine::init_vulkan(void)
     create_descriptor_set_layout();
     create_graphics_pipeline();
     create_command_pool();
+    create_texture_image();
+    create_texture_image_view();
+    create_texture_sampler();
     create_vertex_buffer();
     create_index_buffer();
     create_uniform_buffers();
@@ -233,7 +239,8 @@ void Engine::create_logical_device(void)
                        vk::PhysicalDeviceVulkan11Features,
                        vk::PhysicalDeviceVulkan13Features,
                        vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT> feature_chain = {
-        vk::PhysicalDeviceFeatures2(),
+        vk::PhysicalDeviceFeatures2()
+            .features.setSamplerAnisotropy(true),
         vk::PhysicalDeviceVulkan11Features()
             .setShaderDrawParameters(true),
         vk::PhysicalDeviceVulkan13Features()
@@ -333,9 +340,21 @@ void Engine::create_descriptor_set_layout(void)
         vk::ShaderStageFlagBits::eVertex
     );
 
+    vk::DescriptorSetLayoutBinding sampler_binding(
+        1,
+        vk::DescriptorType::eCombinedImageSampler,
+        1,
+        vk::ShaderStageFlagBits::eFragment
+    );
+
+    std::vector<vk::DescriptorSetLayoutBinding> bindings = {
+        ubo_binding,
+        sampler_binding,
+    };
+
     vk::DescriptorSetLayoutCreateInfo layout_info(
         {},
-        { ubo_binding }
+        bindings
     );
     this->descriptor_layout = vk::raii::DescriptorSetLayout(this->device, layout_info);
 }
@@ -483,34 +502,99 @@ void Engine::create_graphics_pipeline(void)
     this->pipeline = vk::raii::Pipeline(this->device, nullptr, pipeline_create_info);
 }
 
-void Engine::copy_buffer(
-        vk::raii::Buffer &dst,
-        vk::raii::Buffer &src,
-        vk::DeviceSize size
-    )
+void Engine::create_texture_image(void)
 {
-    vk::CommandBufferAllocateInfo alloc_info(
-        this->command_pool,
-        vk::CommandBufferLevel::ePrimary,
-        1
+    int width, height, channels;
+
+    stbi_uc *pixels = stbi_load(
+        CONFIG_TEXTURE_PATH,
+        &width,
+        &height,
+        &channels,
+        STBI_rgb_alpha
+    );
+    if (pixels == nullptr) {
+        throw std::runtime_error("failed to load texture at path "s + CONFIG_TEXTURE_PATH);
+    }
+
+    vk::DeviceSize size = width * height * 4;
+
+    auto [staging_buffer, staging_buffer_mem] = create_buffer(
+        size,
+        vk::BufferUsageFlagBits::eTransferSrc,
+        vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
     );
 
-    vk::raii::CommandBuffers cb(this->device, alloc_info);
+    void *ptr = staging_buffer_mem.mapMemory(0, size);
+    memcpy(ptr, pixels, size);
+    staging_buffer_mem.unmapMemory();
 
-    vk::CommandBufferBeginInfo begin_info(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
-    cb.front().begin(begin_info);
+    stbi_image_free(pixels);
 
-    cb.front().copyBuffer(*src, *dst, vk::BufferCopy(0, 0, size));
-
-    cb.front().end();
-
-    vk::SubmitInfo submit_info(
-        {},
-        {},
-        { *cb.front() }
+    std::tie(this->texture_image, this->texture_image_mem) = create_image(
+        width,
+        height,
+        vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled,
+        vk::MemoryPropertyFlagBits::eDeviceLocal
     );
-    this->queue.submit(submit_info);
-    this->queue.waitIdle();
+
+    vk::raii::CommandBuffer cb = begin_single_time_commands(this->command_pool);
+    transition_image_layout(
+        cb,
+        this->texture_image,
+        vk::ImageLayout::eUndefined,
+        vk::ImageLayout::eTransferDstOptimal,
+        {},
+        vk::AccessFlagBits2::eTransferWrite,
+        vk::PipelineStageFlagBits2::eTopOfPipe,
+        vk::PipelineStageFlagBits2::eTransfer
+    );
+
+    copy_buffer_to_image(cb, this->texture_image, staging_buffer, width, height);
+
+    transition_image_layout(
+        cb,
+        this->texture_image,
+        vk::ImageLayout::eTransferDstOptimal,
+        vk::ImageLayout::eShaderReadOnlyOptimal,
+        vk::AccessFlagBits2::eTransferWrite,
+        vk::AccessFlagBits2::eShaderRead,
+        vk::PipelineStageFlagBits2::eTransfer,
+        vk::PipelineStageFlagBits2::eFragmentShader
+    );
+
+    end_single_time_commands(std::move(cb));
+}
+
+void Engine::create_texture_image_view(void)
+{
+    this->texture_image_view = create_image_view(this->texture_image, vk::Format::eR8G8B8A8Srgb);
+}
+
+void Engine::create_texture_sampler(void)
+{
+    vk::PhysicalDeviceProperties properties = this->physical_device.getProperties();
+
+    vk::SamplerCreateInfo sampler_info(
+        {},
+        vk::Filter::eLinear,
+        vk::Filter::eLinear,
+        vk::SamplerMipmapMode::eLinear,
+        vk::SamplerAddressMode::eRepeat,
+        vk::SamplerAddressMode::eRepeat,
+        vk::SamplerAddressMode::eRepeat,
+        0,
+        vk::True,
+        properties.limits.maxSamplerAnisotropy,
+        vk::False,
+        vk::CompareOp::eNever,
+        0,
+        0,
+        vk::BorderColor::eIntOpaqueBlack,
+        vk::False
+    );
+
+    this->texture_sampler = vk::raii::Sampler(this->device, sampler_info);
 }
 
 void Engine::create_vertex_buffer(void)
@@ -518,8 +602,6 @@ void Engine::create_vertex_buffer(void)
     vk::DeviceSize size = sizeof(g_vertices[0]) * g_vertices.size();
 
     auto [staging_buffer, staging_buffer_mem] = create_buffer(
-        this->physical_device,
-        this->device,
         size,
         vk::BufferUsageFlagBits::eTransferSrc,
         vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
@@ -530,8 +612,6 @@ void Engine::create_vertex_buffer(void)
     staging_buffer_mem.unmapMemory();
 
     std::tie(this->vertex_buffer, this->vertex_buffer_mem) = create_buffer(
-        this->physical_device,
-        this->device,
         size,
         vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst,
         vk::MemoryPropertyFlagBits::eDeviceLocal
@@ -545,8 +625,6 @@ void Engine::create_index_buffer(void)
     vk::DeviceSize size = sizeof(g_indices[0]) * g_indices.size();
 
     auto [staging_buffer, staging_buffer_mem] = create_buffer(
-        this->physical_device,
-        this->device,
         size,
         vk::BufferUsageFlagBits::eTransferSrc,
         vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
@@ -557,8 +635,6 @@ void Engine::create_index_buffer(void)
     staging_buffer_mem.unmapMemory();
 
     std::tie(this->index_buffer, this->index_buffer_mem) = create_buffer(
-        this->physical_device,
-        this->device,
         size,
         vk::BufferUsageFlagBits::eIndexBuffer | vk::BufferUsageFlagBits::eTransferDst,
         vk::MemoryPropertyFlagBits::eDeviceLocal
@@ -575,8 +651,6 @@ void Engine::create_uniform_buffers(void)
         vk::DeviceSize size = sizeof(UniformBufferObject);
 
         auto [buffer, buffer_mem] = create_buffer(
-            this->physical_device,
-            this->device,
             size,
             vk::BufferUsageFlagBits::eUniformBuffer,
             vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
@@ -724,15 +798,25 @@ void Engine::record_command_buffer(uint32_t image_index, uint32_t frame_index)
 
 void Engine::create_descriptor_pool(void)
 {
-    vk::DescriptorPoolSize pool_size(
+    vk::DescriptorPoolSize uniform_pool_size(
         vk::DescriptorType::eUniformBuffer,
         CONFIG_VK_MAX_FRAMES_IN_FLIGHT
     );
 
+    vk::DescriptorPoolSize sampler_pool_size(
+        vk::DescriptorType::eCombinedImageSampler,
+        CONFIG_VK_MAX_FRAMES_IN_FLIGHT
+    );
+
+    std::vector<vk::DescriptorPoolSize> pool_size = {
+        uniform_pool_size,
+        sampler_pool_size,
+    };
+
     vk::DescriptorPoolCreateInfo pool_info(
         vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
         CONFIG_VK_MAX_FRAMES_IN_FLIGHT,
-        { pool_size }
+        pool_size
     );
 
     this->descriptor_pool = vk::raii::DescriptorPool(this->device, pool_info);
@@ -752,27 +836,44 @@ void Engine::create_descriptor_sets(void)
 
     this->descriptor_sets = this->device.allocateDescriptorSets(set_info);
 
-    std::vector<vk::DescriptorBufferInfo> buffer_infos(CONFIG_VK_MAX_FRAMES_IN_FLIGHT);
-    std::vector<vk::WriteDescriptorSet> descriptor_writes(CONFIG_VK_MAX_FRAMES_IN_FLIGHT);
-
     for (int i = 0; i < CONFIG_VK_MAX_FRAMES_IN_FLIGHT; i++) {
-        buffer_infos.at(i) = vk::DescriptorBufferInfo(
+        vk::DescriptorBufferInfo buffer_info(
             this->uniform_buffers.at(i),
             0,
             sizeof(UniformBufferObject)
         );
 
-        descriptor_writes.at(i) = vk::WriteDescriptorSet(
+        vk::WriteDescriptorSet buffer_write(
             this->descriptor_sets.at(i),
             0,
             0,
             vk::DescriptorType::eUniformBuffer,
             {},
-            { buffer_infos.at(i) }
+            buffer_info
         );
-    }
 
-    this->device.updateDescriptorSets({descriptor_writes}, {});
+        vk::DescriptorImageInfo image_info(
+            this->texture_sampler,
+            this->texture_image_view,
+            vk::ImageLayout::eShaderReadOnlyOptimal
+        );
+
+        vk::WriteDescriptorSet image_write(
+            this->descriptor_sets.at(i),
+            1,
+            0,
+            vk::DescriptorType::eCombinedImageSampler,
+            image_info,
+            {}
+        );
+
+        std::vector<vk::WriteDescriptorSet> descriptor_writes = {
+            buffer_write,
+            image_write
+        };
+
+        this->device.updateDescriptorSets(descriptor_writes, {});
+    }
 }
 
 void Engine::create_sync_objects(void)
@@ -918,4 +1019,3 @@ void Engine::cleanup(void)
     glfwDestroyWindow(this->window);
     glfwTerminate();
 }
-

@@ -11,6 +11,7 @@ CXXFLAGS  =				\
 	-std=c++23			\
 	-I $(VK_SDK)/x86_64/include/	\
 	-L $(VK_SDK)/lib		\
+	-I ../thirdparty/		\
 					\
 	-Wall				\
 	-Wextra
@@ -26,7 +27,8 @@ DEP	= Makefile	\
 	  util.cpp	\
 	  config.h      \
 			\
-	  shader.spv
+	  shader.spv	\
+	  stb_image
 
 
 $(NAME): $(DEP)
@@ -51,6 +53,12 @@ shader.spv: Makefile shader.slang
 		-separate-debug-info	\
 					\
 		-o shader.spv
+
+stb_image:
+	tar xf					\
+		../thirdparty/stb_image.tar	\
+		--directory=../thirdparty
+
 
 clean:
 	rm -f $(NAME)

@@ -2,6 +2,9 @@
 #include "config.h"
 #include "engine.hpp"
 
+#include "vulkan/vulkan.hpp"
+#include "vulkan/vulkan_raii.hpp"
+#include <cfenv>
 #include <iostream>
 #include <fstream>
 
@@ -10,9 +13,165 @@ static inline uint64_t BIT(uint64_t x)
     return 1 << x;
 }
 
+void Engine::copy_buffer_to_image(
+        const vk::raii::CommandBuffer &cb,
+        vk::raii::Image &dst,
+        const vk::raii::Buffer &src,
+        uint32_t width,
+        uint32_t height
+    )
+{
+    vk::BufferImageCopy region(
+        0,
+        0,
+        0,
+        vk::ImageSubresourceLayers(
+            vk::ImageAspectFlagBits::eColor,
+            0,
+            0,
+            1
+        ),
+        { 0, 0, 0 },
+        { width, height, 1 }
+    );
+
+    cb.copyBufferToImage(
+        src,
+        dst,
+        vk::ImageLayout::eTransferDstOptimal, region
+    );
+}
+
+void Engine::copy_buffer(
+        vk::raii::Buffer &dst,
+        const vk::raii::Buffer &src,
+        vk::DeviceSize size
+    )
+{
+    vk::CommandBufferAllocateInfo alloc_info(
+        command_pool,
+        vk::CommandBufferLevel::ePrimary,
+        1
+    );
+
+    vk::raii::CommandBuffers cb(this->device, alloc_info);
+
+    vk::CommandBufferBeginInfo begin_info(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
+    cb.front().begin(begin_info);
+
+    cb.front().copyBuffer(*src, *dst, vk::BufferCopy(0, 0, size));
+
+    cb.front().end();
+
+    vk::SubmitInfo submit_info(
+        {},
+        {},
+        { *cb.front() }
+    );
+    queue.submit(submit_info);
+    queue.waitIdle();
+}
+
+
+vk::raii::CommandBuffer Engine::begin_single_time_commands(
+        const vk::raii::CommandPool &command_pool
+    )
+{
+    vk::CommandBufferAllocateInfo buffer_info(
+        command_pool,
+        vk::CommandBufferLevel::ePrimary,
+        1
+    );
+
+    vk::raii::CommandBuffers cb = this->device.allocateCommandBuffers(buffer_info);
+
+    vk::CommandBufferBeginInfo begin_info(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
+    cb.front().begin(begin_info);
+
+    return std::move(cb.front());
+}
+
+void Engine::end_single_time_commands(
+        vk::raii::CommandBuffer &&cb
+    )
+{
+    cb.end();
+
+    vk::SubmitInfo submit_info(
+        {},
+        {},
+        *cb
+    );
+
+    queue.submit(submit_info);
+    queue.waitIdle();
+}
+
+std::pair<vk::raii::Image, vk::raii::DeviceMemory> Engine::create_image(
+        uint32_t width,
+        uint32_t height,
+        vk::ImageUsageFlags usage,
+        vk::MemoryPropertyFlags properties
+    )
+{
+    vk::ImageCreateInfo image_info(
+        {},
+        vk::ImageType::e2D,
+        vk::Format::eR8G8B8A8Srgb,
+        {width, height, 1},
+        1,
+        1,
+        vk::SampleCountFlagBits::e1,
+        vk::ImageTiling::eOptimal,
+        usage,
+        vk::SharingMode::eExclusive,
+        {},
+        {},
+        vk::ImageLayout::eUndefined
+    );
+
+    vk::raii::Image image(this->device, image_info);
+
+    vk::MemoryRequirements mem_req = image.getMemoryRequirements();
+    uint32_t type_index = find_memory_type(
+        this->physical_device,
+        mem_req.memoryTypeBits,
+        properties
+    );
+
+    vk::MemoryAllocateInfo alloc_info(mem_req.size, type_index);
+
+    vk::raii::DeviceMemory mem(this->device, alloc_info);
+
+    image.bindMemory(mem, 0);
+
+    return { std::move(image), std::move(mem) };
+}
+
+vk::raii::ImageView Engine::create_image_view(
+        const vk::raii::Image &image,
+        vk::Format format
+    )
+{
+    vk::ImageViewCreateInfo image_view_info(
+        {},
+        image,
+        vk::ImageViewType::e2D,
+        format,
+        {},
+        vk::ImageSubresourceRange(
+            vk::ImageAspectFlagBits::eColor,
+            0,
+            1,
+            0,
+            1
+        )
+    );
+
+    return vk::raii::ImageView(this->device, image_view_info);
+}
+
 std::pair<vk::raii::Buffer, vk::raii::DeviceMemory> Engine::create_buffer(
-        const vk::raii::PhysicalDevice &pd,
-        const vk::raii::Device &dev,
         vk::DeviceSize size,
         vk::BufferUsageFlags usage,
         vk::MemoryPropertyFlags properties
@@ -25,17 +184,17 @@ std::pair<vk::raii::Buffer, vk::raii::DeviceMemory> Engine::create_buffer(
         vk::SharingMode::eExclusive
     );
 
-    vk::raii::Buffer buffer(dev, buffer_info);
+    vk::raii::Buffer buffer(this->device, buffer_info);
 
     vk::MemoryRequirements mem_req = buffer.getMemoryRequirements();
     uint32_t type_index = find_memory_type(
-        pd,
+        this->physical_device,
         mem_req.memoryTypeBits,
         properties
     );
 
     vk::MemoryAllocateInfo alloc_info(mem_req.size, type_index);
-    vk::raii::DeviceMemory mem(dev, alloc_info);
+    vk::raii::DeviceMemory mem(this->device, alloc_info);
 
     buffer.bindMemory(*mem, 0);
 
@@ -203,19 +362,31 @@ uint32_t Engine::get_queue_family_index(
 
 int Engine::get_physical_device_score(const vk::raii::PhysicalDevice &pd)
 {
+    constexpr int                          NOT_SUTABLE     = -1;
+
     std::vector<const char *>              req_extensions  = get_required_device_extensions();
     std::vector<vk::ExtensionProperties>   supp_extensions = pd.enumerateDeviceExtensionProperties();
     std::vector<vk::QueueFamilyProperties> queue_families  = pd.getQueueFamilyProperties();
     vk::PhysicalDeviceProperties           props           = pd.getProperties();
-    vk::PhysicalDeviceFeatures             features        = pd.getFeatures();
     int                                    score           = 0;
-    constexpr int                          NOT_SUTABLE     = -1;
+
+    auto features = pd.template getFeatures2<vk::PhysicalDeviceFeatures2,
+                                             vk::PhysicalDeviceVulkan11Features,
+                                             vk::PhysicalDeviceVulkan13Features,
+                                             vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>();
 
     if (props.apiVersion < vk::ApiVersion13) {
         return NOT_SUTABLE;
     }
 
-    if (not features.geometryShader) {
+    bool has_all_features =
+        features.template get<vk::PhysicalDeviceFeatures2>().features.samplerAnisotropy &&
+        features.template get<vk::PhysicalDeviceVulkan11Features>().shaderDrawParameters &&
+        features.template get<vk::PhysicalDeviceVulkan13Features>().synchronization2 &&
+        features.template get<vk::PhysicalDeviceVulkan13Features>().dynamicRendering &&
+        features.template get<vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>().extendedDynamicState;
+
+    if (not has_all_features) {
         return NOT_SUTABLE;
     }
 

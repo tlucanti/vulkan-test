@@ -1,7 +1,6 @@
 #ifndef ENGINE_HPP
 #define ENGINE_HPP
 
-#include "vulkan/vulkan.hpp"
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan_raii.hpp>
 
@@ -36,7 +35,10 @@ private:
         void create_descriptor_sets(void);
         void create_graphics_pipeline(void);
 
-        void copy_buffer(vk::raii::Buffer &dst, vk::raii::Buffer &src, vk::DeviceSize size);
+        void create_texture_image(void);
+        void create_texture_image_view(void);
+        void create_texture_sampler(void);
+
         void create_vertex_buffer(void);
         void create_index_buffer(void);
         void create_uniform_buffers(void);
@@ -60,10 +62,45 @@ private:
     void cleanup(void);
 
     // util functions
+    void copy_buffer(
+        vk::raii::Buffer &dst,
+        const vk::raii::Buffer &src,
+        vk::DeviceSize size
+    );
+
+    static void copy_buffer_to_image(
+        const vk::raii::CommandBuffer &cb,
+        vk::raii::Image &dst,
+        const vk::raii::Buffer &src,
+        uint32_t width,
+        uint32_t height
+    );
+
     [[nodiscard]]
-    static std::pair<vk::raii::Buffer, vk::raii::DeviceMemory> create_buffer(
-        const vk::raii::PhysicalDevice &pd,
-        const vk::raii::Device &dev,
+    vk::raii::CommandBuffer begin_single_time_commands(
+        const vk::raii::CommandPool &command_pool
+    );
+
+    void end_single_time_commands(
+        vk::raii::CommandBuffer &&cb
+    );
+
+    [[nodiscard]]
+    std::pair<vk::raii::Image, vk::raii::DeviceMemory> create_image(
+        uint32_t width,
+        uint32_t height,
+        vk::ImageUsageFlags usage,
+        vk::MemoryPropertyFlags properties
+    );
+
+    [[nodiscard]]
+    vk::raii::ImageView create_image_view(
+        const vk::raii::Image &image,
+        vk::Format format
+    );
+
+    [[nodiscard]]
+    std::pair<vk::raii::Buffer, vk::raii::DeviceMemory> create_buffer(
         vk::DeviceSize size,
         vk::BufferUsageFlags usage,
         vk::MemoryPropertyFlags properties
@@ -171,6 +208,11 @@ private:
 
     vk::raii::Buffer                 index_buffer      = nullptr;
     vk::raii::DeviceMemory           index_buffer_mem  = nullptr;
+
+    vk::raii::Image                  texture_image     = nullptr;
+    vk::raii::DeviceMemory           texture_image_mem = nullptr;
+    vk::raii::ImageView              texture_image_view= nullptr;
+    vk::raii::Sampler                texture_sampler   = nullptr;
 
     std::vector<vk::raii::Buffer>       uniform_buffers;
     std::vector<vk::raii::DeviceMemory> uniform_buffers_mem;
