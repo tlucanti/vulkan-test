@@ -13,22 +13,21 @@ CXXFLAGS  =				\
 	-L $(VK_SDK)/lib		\
 					\
 	-Wall				\
-	-Wextra				\
-					\
-	-D CONFIG_VALIDATION_LAYERS=1	\
-	-D CONFIG_VERBOSE=1		\
-	-D CONFIG_RESIZABLE=1		\
-	-D CONFIG_MAX_FRAMES_IN_FLIGHT=2
+	-Wextra
 
 
 NAME	= main.elf
-DEP	= Makefile \
-	  main.cpp \
-	  engine.cpp \
-	  engine.hpp \
-	  vertex.hpp \
-	  util.cpp \
+DEP	= Makefile	\
+			\
+	  main.cpp	\
+	  engine.cpp	\
+	  engine.hpp	\
+	  vertex.hpp	\
+	  util.cpp	\
+	  config.h      \
+			\
 	  shader.spv
+
 
 $(NAME): $(DEP)
 	$(CXX)				\
@@ -44,13 +43,13 @@ $(NAME): $(DEP)
 		-o main.elf
 
 shader.spv: Makefile shader.slang
-	$(SLANGC) \
-		shader.slang \
-		-profile spirv_1_4 \
-		-emit-spirv-directly \
-		-fvk-use-entrypoint-name \
-		-separate-debug-info \
-		\
+	$(SLANGC)			\
+		shader.slang		\
+		-profile spirv_1_4	\
+		-emit-spirv-directly	\
+		-fvk-use-entrypoint-name\
+		-separate-debug-info	\
+					\
 		-o shader.spv
 
 clean:

@@ -1,4 +1,5 @@
 
+#include "config.h"
 #include "vulkan/vulkan.hpp"
 #include "vulkan/vulkan_raii.hpp"
 
@@ -22,13 +23,8 @@
 
 using namespace std::string_literals;
 
-
-static constexpr uint32_t WIDTH = 800;
-static constexpr uint32_t HEIGHT = 600;
-static constexpr const char *SHADER_SPV_PATH = "./shader.spv";
-
 static const std::vector<const char *> g_validation_layers = {
-#if CONFIG_VALIDATION_LAYERS
+#if CONFIG_VK_VALIDATION_LAYERS
     "VK_LAYER_KHRONOS_validation",
 #endif
 };
@@ -64,15 +60,15 @@ void Engine::init_window(void)
     glfwInit();
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    if (CONFIG_RESIZABLE) {
+    if (CONFIG_WINDOW_RESIZABLE) {
         glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
     } else {
         glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
     }
 
     this->window = glfwCreateWindow(
-        WIDTH,
-        HEIGHT,
+        CONFIG_WINDOW_WIDTH,
+        CONFIG_WINDOW_HEIGHT,
         "vulkan",
         nullptr,
         nullptr
@@ -108,7 +104,7 @@ void Engine::create_instance(void)
     std::vector<vk::LayerProperties>     supp_layers     = this->context.enumerateInstanceLayerProperties();
 
 
-    if (CONFIG_VERBOSE) {
+    if (CONFIG_DEBUG_VERBOSE) {
         std::cout << "Avaliable extensions:\n";
         for (const vk::ExtensionProperties &ext : supp_extensions) {
             std::cout << '\t' << ext.extensionName << '\n';
@@ -153,7 +149,7 @@ void Engine::create_instance(void)
 
 void Engine::setup_debug_messanger(void)
 {
-    if (not CONFIG_VALIDATION_LAYERS) {
+    if (not CONFIG_VK_VALIDATION_LAYERS) {
         return;
     }
 
@@ -201,7 +197,7 @@ void Engine::pick_physical_device(void)
         throw std::runtime_error("no GPU devices with vulkan support");
     }
 
-    if (CONFIG_VERBOSE) {
+    if (CONFIG_DEBUG_VERBOSE) {
         std::cout << "Avaliable physical devices:\n";
         for (const vk::raii::PhysicalDevice &pd : devices) {
             vk::PhysicalDeviceProperties props = pd.getProperties();
@@ -220,7 +216,7 @@ void Engine::pick_physical_device(void)
     }
 
     this->physical_device = candidates.rbegin()->second;
-    if (CONFIG_VERBOSE) {
+    if (CONFIG_DEBUG_VERBOSE) {
         std::cout << "Selected device: " << this->physical_device.getProperties().deviceName
                   << " (with score " << candidates.rbegin()->first << ")\n";
     }
@@ -279,7 +275,7 @@ void Engine::create_swapchain(void)
         image_count = std::min(image_count, surface_capabilities.maxImageCount);
     }
 
-    if (CONFIG_VERBOSE) {
+    if (CONFIG_DEBUG_VERBOSE) {
         std::cout << "current window size:";
         std::cout << this->swapchain_extent.width << 'x' << this->swapchain_extent.height << '\n';
     }
@@ -346,7 +342,10 @@ void Engine::create_descriptor_set_layout(void)
 
 void Engine::create_graphics_pipeline(void)
 {
-    vk::raii::ShaderModule shader_module = create_shader_module(this->device, read_file(SHADER_SPV_PATH));
+    vk::raii::ShaderModule shader_module = create_shader_module(
+        this->device,
+        read_file(CONFIG_SHADER_SPV_PATH)
+    );
 
     // shader stages
     vk::PipelineShaderStageCreateInfo vert_create_info(
@@ -432,7 +431,7 @@ void Engine::create_graphics_pipeline(void)
 
     // dynamic states
     std::vector<vk::DynamicState> dynamic;
-    if (CONFIG_RESIZABLE) {
+    if (CONFIG_WINDOW_RESIZABLE) {
         dynamic = {
             vk::DynamicState::eViewport,
             vk::DynamicState::eScissor,
@@ -572,7 +571,7 @@ void Engine::create_uniform_buffers(void)
 {
     this->uniform_buffers.clear();
 
-    for (int i = 0; i < CONFIG_MAX_FRAMES_IN_FLIGHT; i++) {
+    for (int i = 0; i < CONFIG_VK_MAX_FRAMES_IN_FLIGHT; i++) {
         vk::DeviceSize size = sizeof(UniformBufferObject);
 
         auto [buffer, buffer_mem] = create_buffer(
@@ -604,7 +603,7 @@ void Engine::create_command_buffers(void)
     vk::CommandBufferAllocateInfo allocate_info(
         this->command_pool,
         vk::CommandBufferLevel::ePrimary,
-        CONFIG_MAX_FRAMES_IN_FLIGHT
+        CONFIG_VK_MAX_FRAMES_IN_FLIGHT
     );
 
     this->command_buffers = vk::raii::CommandBuffers(this->device, allocate_info);
@@ -725,12 +724,12 @@ void Engine::create_descriptor_pool(void)
 {
     vk::DescriptorPoolSize pool_size(
         vk::DescriptorType::eUniformBuffer,
-        CONFIG_MAX_FRAMES_IN_FLIGHT
+        CONFIG_VK_MAX_FRAMES_IN_FLIGHT
     );
 
     vk::DescriptorPoolCreateInfo pool_info(
         vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
-        CONFIG_MAX_FRAMES_IN_FLIGHT,
+        CONFIG_VK_MAX_FRAMES_IN_FLIGHT,
         { pool_size }
     );
 
@@ -740,7 +739,7 @@ void Engine::create_descriptor_pool(void)
 void Engine::create_descriptor_sets(void)
 {
     std::vector<vk::DescriptorSetLayout> layouts(
-        CONFIG_MAX_FRAMES_IN_FLIGHT,
+        CONFIG_VK_MAX_FRAMES_IN_FLIGHT,
         *this->descriptor_layout
     );
 
@@ -751,10 +750,10 @@ void Engine::create_descriptor_sets(void)
 
     this->descriptor_sets = this->device.allocateDescriptorSets(set_info);
 
-    std::vector<vk::DescriptorBufferInfo> buffer_infos(CONFIG_MAX_FRAMES_IN_FLIGHT);
-    std::vector<vk::WriteDescriptorSet> descriptor_writes(CONFIG_MAX_FRAMES_IN_FLIGHT);
+    std::vector<vk::DescriptorBufferInfo> buffer_infos(CONFIG_VK_MAX_FRAMES_IN_FLIGHT);
+    std::vector<vk::WriteDescriptorSet> descriptor_writes(CONFIG_VK_MAX_FRAMES_IN_FLIGHT);
 
-    for (int i = 0; i < CONFIG_MAX_FRAMES_IN_FLIGHT; i++) {
+    for (int i = 0; i < CONFIG_VK_MAX_FRAMES_IN_FLIGHT; i++) {
         buffer_infos.at(i) = vk::DescriptorBufferInfo(
             this->uniform_buffers.at(i),
             0,
@@ -776,7 +775,7 @@ void Engine::create_descriptor_sets(void)
 
 void Engine::create_sync_objects(void)
 {
-    for (int i = 0; i < CONFIG_MAX_FRAMES_IN_FLIGHT; i++) {
+    for (int i = 0; i < CONFIG_VK_MAX_FRAMES_IN_FLIGHT; i++) {
         this->present_complete.push_back(
             vk::raii::Semaphore(this->device, vk::SemaphoreCreateInfo())
         );
@@ -825,7 +824,7 @@ void Engine::main_loop(void)
     while (not glfwWindowShouldClose(this->window)) {
         glfwPollEvents();
         draw_frame(current_frame);
-        current_frame = (current_frame + 1) % CONFIG_MAX_FRAMES_IN_FLIGHT;
+        current_frame = (current_frame + 1) % CONFIG_VK_MAX_FRAMES_IN_FLIGHT;
     }
 
     this->device.waitIdle();
@@ -895,11 +894,12 @@ void Engine::draw_frame(int frame_idx)
     );
 
     result = this->queue.presentKHR(present_info);
-    if (CONFIG_VERBOSE) {
+    if (CONFIG_DEBUG_VERBOSE) {
         switch (result) {
         case vk::Result::eSuccess:
             break;
         case vk::Result::eSuboptimalKHR:
+            std::cout << "vk::Queue::PresentKHR: eSuboptimalKHR\n";
             recreate_swapchain();
             break;
         default:

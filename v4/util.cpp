@@ -1,4 +1,5 @@
 
+#include "config.h"
 #include "engine.hpp"
 
 #include <iostream>
@@ -259,7 +260,7 @@ std::vector<const char *> Engine::get_required_instance_extensions(void)
     const char **glfw_extensions      = glfwGetRequiredInstanceExtensions(&glfw_extension_count);
 
     std::vector extensions(glfw_extensions, glfw_extensions + glfw_extension_count);
-    if (CONFIG_VALIDATION_LAYERS) {
+    if (CONFIG_VK_VALIDATION_LAYERS) {
         extensions.push_back(vk::EXTDebugUtilsExtensionName);
     }
 
