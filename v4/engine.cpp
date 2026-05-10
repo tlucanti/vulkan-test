@@ -257,7 +257,7 @@ void Engine::create_logical_device(void)
     );
     vk::DeviceCreateInfo create_info(
         {},
-        { queue_create_info },
+        queue_create_info,
         {},
         extensions,
         {},
@@ -389,7 +389,7 @@ void Engine::create_graphics_pipeline(void)
     auto attribute_descriptions = Vertex::get_attribute_descriptions();
     vk::PipelineVertexInputStateCreateInfo vertex_input(
         {},
-        { binding_description },
+        binding_description,
         attribute_descriptions
     );
 
@@ -445,7 +445,7 @@ void Engine::create_graphics_pipeline(void)
         {},
         vk::False,
         vk::LogicOp::eCopy,
-        { color_blend_attachment }
+        color_blend_attachment
     );
 
     // dynamic states
@@ -464,7 +464,7 @@ void Engine::create_graphics_pipeline(void)
     // pipeline layout
     vk::PipelineLayoutCreateInfo pipeline_layout_create_info(
         {},
-        { *this->descriptor_layout },
+        *this->descriptor_layout,
         {}
     );
     this->pipeline_layout = vk::raii::PipelineLayout(
@@ -475,7 +475,7 @@ void Engine::create_graphics_pipeline(void)
     // pipeline rendering
     vk::PipelineRenderingCreateInfo pipeline_rendering(
         {},
-        { swapchain_surface_foramt.format }
+        swapchain_surface_foramt.format
     );
 
     // graphics pipeline
@@ -718,7 +718,7 @@ void Engine::record_command_buffer(uint32_t image_index, uint32_t frame_index)
         vk::Rect2D({ 0, 0 }, this->swapchain_extent),
         1,
         {},
-        { attachment_info }
+        attachment_info
     );
     cb.beginRendering(rendering_info);
 
@@ -975,10 +975,10 @@ void Engine::draw_frame(int frame_idx)
 
     vk::PipelineStageFlags stage_flags(vk::PipelineStageFlagBits::eColorAttachmentOutput);
     vk::SubmitInfo submit_info(
-        { *present_complete.at(frame_idx) },
-        { stage_flags },
-        { *this->command_buffers.at(frame_idx) },
-        { *render_finished.at(image_index) }
+        *present_complete.at(frame_idx),
+        stage_flags,
+        *this->command_buffers.at(frame_idx),
+        *render_finished.at(image_index)
     );
     this->queue.submit(submit_info, *frame_finished.at(frame_idx));
 
@@ -991,9 +991,9 @@ void Engine::draw_frame(int frame_idx)
     this->device.resetFences({ frame_finished.at(frame_idx) });
 
     vk::PresentInfoKHR present_info(
-        { *render_finished.at(image_index) },
-        { *this->swapchain },
-        { image_index }
+        *render_finished.at(image_index),
+        *this->swapchain,
+        image_index
     );
 
     result = this->queue.presentKHR(present_info);
