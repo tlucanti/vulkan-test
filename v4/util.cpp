@@ -48,28 +48,11 @@ void Engine::copy_buffer(
         vk::DeviceSize size
     )
 {
-    vk::CommandBufferAllocateInfo alloc_info(
-        command_pool,
-        vk::CommandBufferLevel::ePrimary,
-        1
-    );
+    vk::raii::CommandBuffer cb = begin_single_time_commands(this->command_pool);
 
-    vk::raii::CommandBuffers cb(this->device, alloc_info);
+    cb.copyBuffer(*src, *dst, vk::BufferCopy(0, 0, size));
 
-    vk::CommandBufferBeginInfo begin_info(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
-    cb.front().begin(begin_info);
-
-    cb.front().copyBuffer(*src, *dst, vk::BufferCopy(0, 0, size));
-
-    cb.front().end();
-
-    vk::SubmitInfo submit_info(
-        {},
-        {},
-        { *cb.front() }
-    );
-    queue.submit(submit_info);
-    queue.waitIdle();
+    end_single_time_commands(std::move(cb));
 }
 
 
