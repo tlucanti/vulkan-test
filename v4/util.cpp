@@ -4,7 +4,6 @@
 
 #include "vulkan/vulkan.hpp"
 #include "vulkan/vulkan_raii.hpp"
-#include <cfenv>
 #include <iostream>
 #include <fstream>
 
@@ -132,7 +131,7 @@ std::pair<vk::raii::Image, vk::raii::DeviceMemory> Engine::create_image(
 }
 
 vk::raii::ImageView Engine::create_image_view(
-        const vk::raii::Image &image,
+        const vk::Image &image,
         vk::Format format
     )
 {

@@ -325,9 +325,9 @@ void Engine::create_image_views(void)
         )
     );
 
+    this->swapchain_image_views.reserve(this->swapchain_images.size());
     for (const vk::Image &image: this->swapchain_images) {
-        create_info.image = image;
-        this->swapchain_image_views.emplace_back(this->device, create_info);
+        this->swapchain_image_views.emplace_back(create_image_view(image, this->swapchain_surface_foramt.format));
     }
 }
 

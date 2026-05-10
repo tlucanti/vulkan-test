@@ -95,7 +95,7 @@ private:
 
     [[nodiscard]]
     vk::raii::ImageView create_image_view(
-        const vk::raii::Image &image,
+        const vk::Image &image,
         vk::Format format
     );
 
