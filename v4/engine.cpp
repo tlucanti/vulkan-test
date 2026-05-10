@@ -611,12 +611,14 @@ void Engine::create_command_buffers(void)
 
 void Engine::record_command_buffer(uint32_t image_index, uint32_t frame_index)
 {
+    vk::raii::CommandBuffer &cb = this->command_buffers.at(frame_index);
+
     // begin command buffer
-    this->command_buffers.at(frame_index).begin({});
+    cb.begin({});
 
     // transition the swapchain image to COLOR_ATTACHMENT_OPTIMAL
     transition_image_layout(
-        this->command_buffers.at(frame_index),
+        cb,
         this->swapchain_images.at(image_index),
         vk::ImageLayout::eUndefined,
         vk::ImageLayout::eColorAttachmentOptimal,
@@ -644,30 +646,30 @@ void Engine::record_command_buffer(uint32_t image_index, uint32_t frame_index)
         {},
         { attachment_info }
     );
-    this->command_buffers.at(frame_index).beginRendering(rendering_info);
+    cb.beginRendering(rendering_info);
 
     // bind pipeline
-    this->command_buffers.at(frame_index).bindPipeline(
+    cb.bindPipeline(
         vk::PipelineBindPoint::eGraphics,
         this->pipeline
     );
 
     // bind vertex buffer
-    this->command_buffers.at(frame_index).bindVertexBuffers(
+    cb.bindVertexBuffers(
         0,
         { this->vertex_buffer },
         { 0 }
     );
 
     // bind index buffer
-    this->command_buffers.at(frame_index).bindIndexBuffer(
+    cb.bindIndexBuffer(
         this->index_buffer,
         0,
         vk::IndexType::eUint16
     );
 
     // bind descriptor sets
-    this->command_buffers.at(frame_index).bindDescriptorSets(
+    cb.bindDescriptorSets(
         vk::PipelineBindPoint::eGraphics,
         this->pipeline_layout,
         0,
@@ -676,7 +678,7 @@ void Engine::record_command_buffer(uint32_t image_index, uint32_t frame_index)
     );
 
     // set dynamic states
-    this->command_buffers.at(frame_index).setViewport(
+    cb.setViewport(
         0,
         vk::Viewport(
             0,
@@ -687,13 +689,13 @@ void Engine::record_command_buffer(uint32_t image_index, uint32_t frame_index)
             1
         )
     );
-    this->command_buffers.at(frame_index).setScissor(
+    cb.setScissor(
         0,
         vk::Rect2D(vk::Offset2D(0, 0), this->swapchain_extent)
     );
 
     // draw
-    this->command_buffers.at(frame_index).drawIndexed(
+    cb.drawIndexed(
         g_indices.size(),
         1,
         0,
@@ -702,11 +704,11 @@ void Engine::record_command_buffer(uint32_t image_index, uint32_t frame_index)
     );
 
     // end rendering
-    this->command_buffers.at(frame_index).endRendering();
+    cb.endRendering();
 
     // transition the swapchain image to PRESENT_SRC
     transition_image_layout(
-        this->command_buffers.at(frame_index),
+        cb,
         this->swapchain_images.at(image_index),
         vk::ImageLayout::eColorAttachmentOptimal,
         vk::ImageLayout::ePresentSrcKHR,
@@ -717,7 +719,7 @@ void Engine::record_command_buffer(uint32_t image_index, uint32_t frame_index)
     );
 
     // end command buffer
-    this->command_buffers.at(frame_index).end();
+    cb.end();
 }
 
 void Engine::create_descriptor_pool(void)
