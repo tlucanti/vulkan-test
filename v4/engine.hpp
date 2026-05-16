@@ -1,6 +1,7 @@
 #ifndef ENGINE_HPP
 #define ENGINE_HPP
 
+#include "vulkan/vulkan.hpp"
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan_raii.hpp>
 
@@ -35,6 +36,7 @@ private:
         void create_descriptor_sets(void);
         void create_graphics_pipeline(void);
 
+        void create_depth_resources(void);
         void create_texture_image(void);
         void create_texture_image_view(void);
         void create_texture_sampler(void);
@@ -62,6 +64,13 @@ private:
     void cleanup(void);
 
     // util functions
+    [[nodiscard]]
+    vk::Format find_supported_format(
+        const std::vector<vk::Format> &candidates,
+        vk::ImageTiling tiling,
+        vk::FormatFeatureFlagBits features
+    );
+
     void copy_buffer(
         vk::raii::Buffer &dst,
         const vk::raii::Buffer &src,
@@ -89,6 +98,7 @@ private:
     std::pair<vk::raii::Image, vk::raii::DeviceMemory> create_image(
         uint32_t width,
         uint32_t height,
+        vk::Format format,
         vk::ImageUsageFlags usage,
         vk::MemoryPropertyFlags properties
     );
@@ -96,7 +106,8 @@ private:
     [[nodiscard]]
     vk::raii::ImageView create_image_view(
         const vk::Image &image,
-        vk::Format format
+        vk::Format format,
+        vk::ImageAspectFlagBits aspect
     );
 
     [[nodiscard]]
@@ -115,7 +126,8 @@ private:
 
     static void transition_image_layout(
         vk::raii::CommandBuffer &cb,
-        const vk::Image &current_frame,
+        const vk::Image &image,
+        vk::ImageAspectFlagBits aspect,
         vk::ImageLayout old_layout,
         vk::ImageLayout new_layout,
         vk::AccessFlags2 scr_access_mask,
@@ -213,6 +225,11 @@ private:
     vk::raii::DeviceMemory           texture_image_mem = nullptr;
     vk::raii::ImageView              texture_image_view= nullptr;
     vk::raii::Sampler                texture_sampler   = nullptr;
+
+    vk::raii::Image                  depth_image      = nullptr;
+    vk::raii::DeviceMemory           depth_image_mem  = nullptr;
+    vk::raii::ImageView              depth_image_view = nullptr;
+    vk::Format                       depth_format     = vk::Format::eUndefined;
 
     std::vector<vk::raii::Buffer>       uniform_buffers;
     std::vector<vk::raii::DeviceMemory> uniform_buffers_mem;

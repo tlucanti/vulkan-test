@@ -39,14 +39,20 @@ struct UniformBufferObject {
 };
 
 static const std::vector<Vertex> g_vertices = {
-    {{-0.5f, -0.5f}, {1.0f, 0.0f}},
-    {{ 0.5f, -0.5f}, {0.0f, 0.0f}},
-    {{ 0.5f,  0.5f}, {0.0f, 1.0f}},
-    {{-0.5f,  0.5f}, {1.0f, 1.0f}}
+    {{-0.5f, -0.5f,  0.0f}, {0.0f, 0.0f}},
+    {{ 0.5f, -0.5f,  0.0f}, {1.0f, 0.0f}},
+    {{ 0.5f,  0.5f,  0.0f}, {1.0f, 1.0f}},
+    {{-0.5f,  0.5f,  0.0f}, {0.0f, 1.0f}},
+
+    {{-0.5f, -0.5f, -0.5f}, {0.0f, 0.0f}},
+    {{ 0.5f, -0.5f, -0.5f}, {1.0f, 0.0f}},
+    {{ 0.5f,  0.5f, -0.5f}, {1.0f, 1.0f}},
+    {{-0.5f,  0.5f, -0.5f}, {0.0f, 1.0f}}
 };
 
 static const std::vector<uint16_t> g_indices = {
     0, 1, 2, 2, 3, 0,
+    4, 5, 6, 6, 7, 4,
 };
 
 
@@ -87,6 +93,7 @@ void Engine::init_vulkan(void)
     create_logical_device();
     create_swapchain();
     create_image_views();
+    create_depth_resources();
     create_descriptor_set_layout();
     create_graphics_pipeline();
     create_command_pool();
@@ -327,7 +334,13 @@ void Engine::create_image_views(void)
 
     this->swapchain_image_views.reserve(this->swapchain_images.size());
     for (const vk::Image &image: this->swapchain_images) {
-        this->swapchain_image_views.emplace_back(create_image_view(image, this->swapchain_surface_foramt.format));
+        this->swapchain_image_views.emplace_back(
+            create_image_view(
+                image,
+                this->swapchain_surface_foramt.format,
+                vk::ImageAspectFlagBits::eColor
+            )
+        );
     }
 }
 
@@ -430,7 +443,14 @@ void Engine::create_graphics_pipeline(void)
     );
 
     // depth-stencil state
-    // (skipped)
+    vk::PipelineDepthStencilStateCreateInfo depth_stencil(
+        {},
+        true,
+        true,
+        vk::CompareOp::eLess,
+        false,
+        false
+    );
 
     // color blending state
     auto color_blend_attachment =
@@ -475,7 +495,8 @@ void Engine::create_graphics_pipeline(void)
     // pipeline rendering
     vk::PipelineRenderingCreateInfo pipeline_rendering(
         {},
-        swapchain_surface_foramt.format
+        swapchain_surface_foramt.format,
+        this->depth_format
     );
 
     // graphics pipeline
@@ -488,7 +509,7 @@ void Engine::create_graphics_pipeline(void)
         &viewport,
         &rasterizer,
         &multisampler,
-        {},
+        &depth_stencil,
         &color_blender,
         &dynamic_states,
         this->pipeline_layout,
@@ -500,6 +521,29 @@ void Engine::create_graphics_pipeline(void)
     );
 
     this->pipeline = vk::raii::Pipeline(this->device, nullptr, pipeline_create_info);
+}
+
+void Engine::create_depth_resources(void)
+{
+    this->depth_format = find_supported_format(
+        { vk::Format::eD32Sfloat, vk::Format::eD32SfloatS8Uint, vk::Format::eD24UnormS8Uint },
+        vk::ImageTiling::eOptimal,
+        vk::FormatFeatureFlagBits::eDepthStencilAttachment
+    );
+
+    std::tie(this->depth_image, this->depth_image_mem) = create_image(
+        this->swapchain_extent.width,
+        this->swapchain_extent.height,
+        this->depth_format,
+        vk::ImageUsageFlagBits::eDepthStencilAttachment,
+        vk::MemoryPropertyFlagBits::eDeviceLocal
+    );
+
+    this->depth_image_view = create_image_view(
+        this->depth_image,
+        this->depth_format,
+        vk::ImageAspectFlagBits::eDepth
+    );
 }
 
 void Engine::create_texture_image(void)
@@ -534,6 +578,7 @@ void Engine::create_texture_image(void)
     std::tie(this->texture_image, this->texture_image_mem) = create_image(
         width,
         height,
+        vk::Format::eR8G8B8A8Srgb,
         vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled,
         vk::MemoryPropertyFlagBits::eDeviceLocal
     );
@@ -542,6 +587,7 @@ void Engine::create_texture_image(void)
     transition_image_layout(
         cb,
         this->texture_image,
+        vk::ImageAspectFlagBits::eColor,
         vk::ImageLayout::eUndefined,
         vk::ImageLayout::eTransferDstOptimal,
         {},
@@ -555,6 +601,7 @@ void Engine::create_texture_image(void)
     transition_image_layout(
         cb,
         this->texture_image,
+        vk::ImageAspectFlagBits::eColor,
         vk::ImageLayout::eTransferDstOptimal,
         vk::ImageLayout::eShaderReadOnlyOptimal,
         vk::AccessFlagBits2::eTransferWrite,
@@ -568,7 +615,11 @@ void Engine::create_texture_image(void)
 
 void Engine::create_texture_image_view(void)
 {
-    this->texture_image_view = create_image_view(this->texture_image, vk::Format::eR8G8B8A8Srgb);
+    this->texture_image_view = create_image_view(
+        this->texture_image,
+        vk::Format::eR8G8B8A8Srgb,
+        vk::ImageAspectFlagBits::eColor
+    );
 }
 
 void Engine::create_texture_sampler(void)
@@ -690,10 +741,11 @@ void Engine::record_command_buffer(uint32_t image_index, uint32_t frame_index)
     // begin command buffer
     cb.begin({});
 
-    // transition the swapchain image to COLOR_ATTACHMENT_OPTIMAL
+    // before starting rendering - transition the swapchain image to COLOR_ATTACHMENT_OPTIMAL
     transition_image_layout(
         cb,
         this->swapchain_images.at(image_index),
+        vk::ImageAspectFlagBits::eColor,
         vk::ImageLayout::eUndefined,
         vk::ImageLayout::eColorAttachmentOptimal,
         {},
@@ -702,8 +754,21 @@ void Engine::record_command_buffer(uint32_t image_index, uint32_t frame_index)
         vk::PipelineStageFlagBits2::eColorAttachmentOutput
     );
 
+    // before start rendering - transition depth image to depth attachment optimal layout
+    transition_image_layout(
+        cb,
+        this->depth_image,
+        vk::ImageAspectFlagBits::eDepth,
+        vk::ImageLayout::eUndefined,
+        vk::ImageLayout::eDepthAttachmentOptimal,
+        vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
+        vk::AccessFlagBits2::eDepthStencilAttachmentWrite,
+        vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests,
+        vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests
+    );
+
     // start dynamic rendering
-    vk::RenderingAttachmentInfo attachment_info(
+    vk::RenderingAttachmentInfo color_attachment_info(
         this->swapchain_image_views.at(image_index),
         vk::ImageLayout::eColorAttachmentOptimal,
         {},
@@ -713,12 +778,24 @@ void Engine::record_command_buffer(uint32_t image_index, uint32_t frame_index)
         vk::AttachmentStoreOp::eStore,
         vk::ClearColorValue(0, 0, 0, 1)
     );
+    vk::RenderingAttachmentInfo depth_attachment_info(
+        this->depth_image_view,
+        vk::ImageLayout::eDepthAttachmentOptimal,
+        {},
+        {},
+        {},
+        vk::AttachmentLoadOp::eClear,
+        vk::AttachmentStoreOp::eDontCare,
+        vk::ClearDepthStencilValue(1.0f, 0)
+    );
     vk::RenderingInfo rendering_info(
         {},
         vk::Rect2D({ 0, 0 }, this->swapchain_extent),
         1,
         {},
-        attachment_info
+        color_attachment_info,
+        &depth_attachment_info,
+        {}
     );
     cb.beginRendering(rendering_info);
 
@@ -784,6 +861,7 @@ void Engine::record_command_buffer(uint32_t image_index, uint32_t frame_index)
     transition_image_layout(
         cb,
         this->swapchain_images.at(image_index),
+        vk::ImageAspectFlagBits::eColor,
         vk::ImageLayout::eColorAttachmentOptimal,
         vk::ImageLayout::ePresentSrcKHR,
         vk::AccessFlagBits2::eColorAttachmentWrite,

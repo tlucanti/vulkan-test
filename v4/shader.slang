@@ -1,6 +1,6 @@
 
 struct VertexInput {
-    float2 position;
+    float3 position;
     float2 tex_coord;
 };
 
@@ -20,7 +20,7 @@ struct VertexOutput {
 VertexOutput vert_main(VertexInput input) {
     VertexOutput output;
 
-    float4 pos = float4(input.position, 0, 1);
+    float4 pos = float4(input.position, 1.0f);
     pos = mul(ubo.model, pos);
     pos = mul(ubo.view, pos);
     pos = mul(ubo.proj, pos);

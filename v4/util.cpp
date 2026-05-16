@@ -6,10 +6,34 @@
 #include "vulkan/vulkan_raii.hpp"
 #include <iostream>
 #include <fstream>
+#include <stdexcept>
 
 static inline uint64_t BIT(uint64_t x)
 {
     return 1 << x;
+}
+
+vk::Format Engine::find_supported_format(
+        const std::vector<vk::Format> &candidates,
+        vk::ImageTiling tiling,
+        vk::FormatFeatureFlagBits features
+    )
+{
+    for (vk::Format format : candidates) {
+        vk::FormatProperties props = this->physical_device.getFormatProperties(format);
+
+        if (tiling == vk::ImageTiling::eLinear &&
+            (props.linearTilingFeatures & features) == features) {
+            return format;
+        }
+
+        if (tiling == vk::ImageTiling::eOptimal &&
+            (props.optimalTilingFeatures & features) == features) {
+            return format;
+        }
+    }
+
+    throw std::runtime_error("failed to find supported format");
 }
 
 void Engine::copy_buffer_to_image(
@@ -92,6 +116,7 @@ void Engine::end_single_time_commands(
 std::pair<vk::raii::Image, vk::raii::DeviceMemory> Engine::create_image(
         uint32_t width,
         uint32_t height,
+        vk::Format format,
         vk::ImageUsageFlags usage,
         vk::MemoryPropertyFlags properties
     )
@@ -99,7 +124,7 @@ std::pair<vk::raii::Image, vk::raii::DeviceMemory> Engine::create_image(
     vk::ImageCreateInfo image_info(
         {},
         vk::ImageType::e2D,
-        vk::Format::eR8G8B8A8Srgb,
+        format,
         {width, height, 1},
         1,
         1,
@@ -132,7 +157,8 @@ std::pair<vk::raii::Image, vk::raii::DeviceMemory> Engine::create_image(
 
 vk::raii::ImageView Engine::create_image_view(
         const vk::Image &image,
-        vk::Format format
+        vk::Format format,
+        vk::ImageAspectFlagBits aspect
     )
 {
     vk::ImageViewCreateInfo image_view_info(
@@ -142,7 +168,7 @@ vk::raii::ImageView Engine::create_image_view(
         format,
         {},
         vk::ImageSubresourceRange(
-            vk::ImageAspectFlagBits::eColor,
+            aspect,
             0,
             1,
             0,
@@ -206,7 +232,8 @@ uint32_t Engine::find_memory_type(
 
 void Engine::transition_image_layout(
         vk::raii::CommandBuffer &cb,
-        const vk::Image &current_frame,
+        const vk::Image &image,
+        vk::ImageAspectFlagBits aspect,
         vk::ImageLayout old_layout,
         vk::ImageLayout new_layout,
         vk::AccessFlags2 scr_access_mask,
@@ -216,7 +243,7 @@ void Engine::transition_image_layout(
     )
 {
     vk::ImageSubresourceRange subresource_range(
-        vk::ImageAspectFlagBits::eColor,
+        aspect,
         0,
         1,
         0,
@@ -231,7 +258,7 @@ void Engine::transition_image_layout(
         new_layout,
         VK_QUEUE_FAMILY_IGNORED,
         VK_QUEUE_FAMILY_IGNORED,
-        current_frame,
+        image,
         subresource_range
     );
     vk::DependencyInfo dependency_info(
