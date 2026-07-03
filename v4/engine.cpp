@@ -989,6 +989,7 @@ void Engine::recreate_swapchain(void)
 
     create_swapchain();
     create_image_views();
+    create_depth_resources();
     create_swapchain_sync_objects();
 }
 
