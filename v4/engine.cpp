@@ -23,6 +23,7 @@
 #include <map>
 #include <stdexcept>
 #include <vector>
+#include <unordered_map>
 
 #include "engine.hpp"
 #include "vertex.hpp"
@@ -640,6 +641,7 @@ void Engine::load_model(void)
     std::vector<tinyobj::shape_t>    shapes;
     std::vector<tinyobj::material_t> materials;
     std::string                      warn, err;
+    std::unordered_map<Vertex, uint32_t> uniq_vertices;
 
     if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, CONFIG_MODEL_PATH)) {
         throw std::runtime_error(warn + err);
@@ -660,8 +662,12 @@ void Engine::load_model(void)
                 1.0f - attrib.texcoords[2 * index.texcoord_index + 1],
             };
 
-            this->vertices.push_back(vertex);
-            this->indices.push_back(indices.size());
+            auto [it, inserted] = uniq_vertices.insert({vertex, this->vertices.size()});
+            if (inserted) {
+                vertices.push_back(vertex);
+            }
+
+            this->indices.push_back(it->second);
         }
     }
 }
