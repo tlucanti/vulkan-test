@@ -415,6 +415,10 @@ int Engine::get_physical_device_score(const vk::raii::PhysicalDevice &pd)
         }
     }
 
+    if (std::string(props.deviceName).contains("llvmpipe")) {
+        return 0;
+    }
+
     if (props.deviceType == vk::PhysicalDeviceType::eDiscreteGpu) {
         score += 10000;
     }
