@@ -1,4 +1,7 @@
 
+#ifndef VERTEX_HPP
+#define VERTEX_HPP
+
 #include "vulkan/vulkan.hpp"
 #include <vulkan/vulkan.hpp>
 
@@ -29,3 +32,4 @@ struct Vertex {
     }
 };
 
+#endif /* VERTEX_HPP */
