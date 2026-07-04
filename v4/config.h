@@ -8,6 +8,7 @@
 #define CONFIG_WINDOW_WIDTH     800
 #define CONFIG_WINDOW_HEIGHT    600
 
-#define CONFIG_TEXTURE_PATH "textures/texture.png"
+#define CONFIG_MODEL_PATH       "../thirdparty/viking_room.obj"
+#define CONFIG_TEXTURE_PATH     "../thirdparty/viking_room.png"
 
 #define CONFIG_DEBUG_VERBOSE 1

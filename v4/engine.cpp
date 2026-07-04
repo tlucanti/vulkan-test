@@ -13,6 +13,9 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
+#define TINYOBJLOADER_IMPLEMENTATION
+#include <tiny_obj_loader.h>
+
 #include <algorithm>
 #include <chrono>
 #include <cstring>
@@ -37,24 +40,6 @@ struct UniformBufferObject {
     glm::mat4 view;
     glm::mat4 proj;
 };
-
-static const std::vector<Vertex> g_vertices = {
-    {{-0.5f, -0.5f,  0.0f}, {0.0f, 0.0f}},
-    {{ 0.5f, -0.5f,  0.0f}, {1.0f, 0.0f}},
-    {{ 0.5f,  0.5f,  0.0f}, {1.0f, 1.0f}},
-    {{-0.5f,  0.5f,  0.0f}, {0.0f, 1.0f}},
-
-    {{-0.5f, -0.5f, -0.5f}, {0.0f, 0.0f}},
-    {{ 0.5f, -0.5f, -0.5f}, {1.0f, 0.0f}},
-    {{ 0.5f,  0.5f, -0.5f}, {1.0f, 1.0f}},
-    {{-0.5f,  0.5f, -0.5f}, {0.0f, 1.0f}}
-};
-
-static const std::vector<uint16_t> g_indices = {
-    0, 1, 2, 2, 3, 0,
-    4, 5, 6, 6, 7, 4,
-};
-
 
 void Engine::run(void)
 {
@@ -100,6 +85,7 @@ void Engine::init_vulkan(void)
     create_texture_image();
     create_texture_image_view();
     create_texture_sampler();
+    load_model();
     create_vertex_buffer();
     create_index_buffer();
     create_uniform_buffers();
@@ -648,9 +634,41 @@ void Engine::create_texture_sampler(void)
     this->texture_sampler = vk::raii::Sampler(this->device, sampler_info);
 }
 
+void Engine::load_model(void)
+{
+    tinyobj::attrib_t                attrib;
+    std::vector<tinyobj::shape_t>    shapes;
+    std::vector<tinyobj::material_t> materials;
+    std::string                      warn, err;
+
+    if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, CONFIG_MODEL_PATH)) {
+        throw std::runtime_error(warn + err);
+    }
+
+    for (const tinyobj::shape_t &shape : shapes) {
+        for (const tinyobj::index_t &index : shape.mesh.indices) {
+            Vertex vertex;
+
+            vertex.pos = {
+                attrib.vertices[3 * index.vertex_index + 0],
+                attrib.vertices[3 * index.vertex_index + 1],
+                attrib.vertices[3 * index.vertex_index + 2],
+            };
+
+            vertex.tex_coord = {
+                attrib.texcoords[2 * index.texcoord_index + 0],
+                1.0f - attrib.texcoords[2 * index.texcoord_index + 1],
+            };
+
+            this->vertices.push_back(vertex);
+            this->indices.push_back(indices.size());
+        }
+    }
+}
+
 void Engine::create_vertex_buffer(void)
 {
-    vk::DeviceSize size = sizeof(g_vertices[0]) * g_vertices.size();
+    vk::DeviceSize size = sizeof(this->vertices[0]) * this->vertices.size();
 
     auto [staging_buffer, staging_buffer_mem] = create_buffer(
         size,
@@ -659,7 +677,7 @@ void Engine::create_vertex_buffer(void)
     );
 
     void *ptr = staging_buffer_mem.mapMemory(0, size);
-    memcpy(ptr, g_vertices.data(), size);
+    memcpy(ptr, this->vertices.data(), size);
     staging_buffer_mem.unmapMemory();
 
     std::tie(this->vertex_buffer, this->vertex_buffer_mem) = create_buffer(
@@ -673,7 +691,7 @@ void Engine::create_vertex_buffer(void)
 
 void Engine::create_index_buffer(void)
 {
-    vk::DeviceSize size = sizeof(g_indices[0]) * g_indices.size();
+    vk::DeviceSize size = sizeof(this->indices[0]) * this->indices.size();
 
     auto [staging_buffer, staging_buffer_mem] = create_buffer(
         size,
@@ -682,7 +700,7 @@ void Engine::create_index_buffer(void)
     );
 
     void *ptr = staging_buffer_mem.mapMemory(0, size);
-    memcpy(ptr, g_indices.data(), size);
+    memcpy(ptr, this->indices.data(), size);
     staging_buffer_mem.unmapMemory();
 
     std::tie(this->index_buffer, this->index_buffer_mem) = create_buffer(
@@ -816,7 +834,7 @@ void Engine::record_command_buffer(uint32_t image_index, uint32_t frame_index)
     cb.bindIndexBuffer(
         this->index_buffer,
         0,
-        vk::IndexType::eUint16
+        vk::IndexType::eUint32
     );
 
     // bind descriptor sets
@@ -847,7 +865,7 @@ void Engine::record_command_buffer(uint32_t image_index, uint32_t frame_index)
 
     // draw
     cb.drawIndexed(
-        g_indices.size(),
+        this->indices.size(),
         1,
         0,
         0,

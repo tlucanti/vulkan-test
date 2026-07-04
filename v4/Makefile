@@ -28,7 +28,9 @@ DEP	= Makefile	\
 	  config.h      \
 			\
 	  shader.spv	\
-	  stb_image
+	  stb_image	\
+	  viking_room	\
+	  tiny_obj_loader
 
 
 $(NAME): $(DEP)
@@ -59,6 +61,15 @@ stb_image:
 		../thirdparty/stb_image.tar	\
 		--directory=../thirdparty
 
+tiny_obj_loader:
+	tar xf						\
+		../thirdparty/tiny_obj_loader.tar	\
+		--directory=../thirdparty
+
+viking_room:
+	tar xf					\
+		../thirdparty/viking_room.tar	\
+		--directory=../thirdparty
 
 clean:
 	rm -f $(NAME)

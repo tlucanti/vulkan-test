@@ -1,6 +1,8 @@
 #ifndef ENGINE_HPP
 #define ENGINE_HPP
 
+#include "vertex.hpp"
+
 #include "vulkan/vulkan.hpp"
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan_raii.hpp>
@@ -41,6 +43,7 @@ private:
         void create_texture_image_view(void);
         void create_texture_sampler(void);
 
+        void load_model(void);
         void create_vertex_buffer(void);
         void create_index_buffer(void);
         void create_uniform_buffers(void);
@@ -214,6 +217,9 @@ private:
 
     vk::raii::PipelineLayout         pipeline_layout   = nullptr;
     vk::raii::Pipeline               pipeline          = nullptr;
+
+    std::vector<Vertex>              vertices;
+    std::vector<uint32_t>            indices;
 
     vk::raii::Buffer                 vertex_buffer     = nullptr;
     vk::raii::DeviceMemory           vertex_buffer_mem = nullptr;
