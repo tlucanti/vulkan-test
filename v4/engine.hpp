@@ -102,6 +102,7 @@ private:
         uint32_t width,
         uint32_t height,
         vk::Format format,
+        uint32_t mip_levels,
         vk::ImageUsageFlags usage,
         vk::MemoryPropertyFlags properties
     );
@@ -110,7 +111,8 @@ private:
     vk::raii::ImageView create_image_view(
         const vk::Image &image,
         vk::Format format,
-        vk::ImageAspectFlagBits aspect
+        vk::ImageAspectFlagBits aspect,
+        uint32_t mip_levels
     );
 
     [[nodiscard]]
@@ -127,9 +129,18 @@ private:
         vk::MemoryPropertyFlags properties
     );
 
+    static void generate_mipmaps(
+        const vk::raii::CommandBuffer &cb,
+        const vk::raii::Image &image,
+        uint32_t mip_levels,
+        uint32_t width,
+        uint32_t height
+    );
+
     static void transition_image_layout(
         vk::raii::CommandBuffer &cb,
         const vk::Image &image,
+        uint32_t mip_levels,
         vk::ImageAspectFlagBits aspect,
         vk::ImageLayout old_layout,
         vk::ImageLayout new_layout,
@@ -227,6 +238,7 @@ private:
     vk::raii::Buffer                 index_buffer      = nullptr;
     vk::raii::DeviceMemory           index_buffer_mem  = nullptr;
 
+    uint32_t                         mip_levels        = 0;
     vk::raii::Image                  texture_image     = nullptr;
     vk::raii::DeviceMemory           texture_image_mem = nullptr;
     vk::raii::ImageView              texture_image_view= nullptr;

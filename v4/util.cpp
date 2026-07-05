@@ -36,6 +36,122 @@ vk::Format Engine::find_supported_format(
     throw std::runtime_error("failed to find supported format");
 }
 
+void Engine::generate_mipmaps(
+        const vk::raii::CommandBuffer &cb,
+        const vk::raii::Image &image,
+        uint32_t mip_levels,
+        uint32_t width,
+        uint32_t height
+    )
+{
+    vk::ImageMemoryBarrier transfer_barrier(
+        vk::AccessFlagBits::eTransferWrite,
+        vk::AccessFlagBits::eTransferRead,
+        vk::ImageLayout::eTransferDstOptimal,
+        vk::ImageLayout::eTransferSrcOptimal,
+        vk::QueueFamilyIgnored,
+        vk::QueueFamilyIgnored,
+        image,
+        vk::ImageSubresourceRange(
+            vk::ImageAspectFlagBits::eColor,
+            0,
+            1,
+            0,
+            1
+        )
+    );
+
+    vk::ImageMemoryBarrier blit_barrier(
+        vk::AccessFlagBits::eTransferRead,
+        vk::AccessFlagBits::eShaderRead,
+        vk::ImageLayout::eTransferSrcOptimal,
+        vk::ImageLayout::eShaderReadOnlyOptimal,
+        vk::QueueFamilyIgnored,
+        vk::QueueFamilyIgnored,
+        image,
+        vk::ImageSubresourceRange(
+            vk::ImageAspectFlagBits::eColor,
+            0,
+            1,
+            0,
+            1
+        )
+    );
+
+    for (uint32_t i = 1; i < mip_levels; i++) {
+        uint32_t width_next = std::max(1u, width / 2);
+        uint32_t height_next = std::max(1u, height / 2);
+
+        transfer_barrier.subresourceRange.baseMipLevel = i - 1;
+        blit_barrier.subresourceRange.baseMipLevel = i - 1;
+
+        vk::ImageBlit blit(
+            vk::ImageSubresourceLayers(
+                vk::ImageAspectFlagBits::eColor,
+                i - 1,
+                0,
+                1
+            ),
+            std::array<vk::Offset3D, 2>{
+                vk::Offset3D(),
+                vk::Offset3D(width, height, 1),
+            },
+            vk::ImageSubresourceLayers(
+                vk::ImageAspectFlagBits::eColor,
+                i,
+                0,
+                1
+            ),
+            std::array<vk::Offset3D, 2>{
+                vk::Offset3D(),
+                vk::Offset3D(width_next, height_next, 1),
+            }
+        );
+
+        cb.pipelineBarrier(
+            vk::PipelineStageFlagBits::eTransfer,
+            vk::PipelineStageFlagBits::eTransfer,
+            {},
+            {},
+            {},
+            transfer_barrier
+        );
+
+        cb.blitImage(
+            image,
+            vk::ImageLayout::eTransferSrcOptimal,
+            image,
+            vk::ImageLayout::eTransferDstOptimal,
+            blit, vk::Filter::eLinear
+        );
+
+        cb.pipelineBarrier(
+            vk::PipelineStageFlagBits::eTransfer,
+            vk::PipelineStageFlagBits::eFragmentShader,
+            {},
+            {},
+            {},
+            blit_barrier
+        );
+
+
+        width = width_next;
+        height = height_next;
+    }
+
+    blit_barrier.subresourceRange.baseMipLevel = mip_levels - 1;
+    blit_barrier.oldLayout = vk::ImageLayout::eTransferDstOptimal;
+
+    cb.pipelineBarrier(
+        vk::PipelineStageFlagBits::eTransfer,
+        vk::PipelineStageFlagBits::eFragmentShader,
+        {},
+        {},
+        {},
+        blit_barrier
+    );
+}
+
 void Engine::copy_buffer_to_image(
         const vk::raii::CommandBuffer &cb,
         vk::raii::Image &dst,
@@ -117,6 +233,7 @@ std::pair<vk::raii::Image, vk::raii::DeviceMemory> Engine::create_image(
         uint32_t width,
         uint32_t height,
         vk::Format format,
+        uint32_t mip_levels,
         vk::ImageUsageFlags usage,
         vk::MemoryPropertyFlags properties
     )
@@ -126,7 +243,7 @@ std::pair<vk::raii::Image, vk::raii::DeviceMemory> Engine::create_image(
         vk::ImageType::e2D,
         format,
         {width, height, 1},
-        1,
+        mip_levels,
         1,
         vk::SampleCountFlagBits::e1,
         vk::ImageTiling::eOptimal,
@@ -158,7 +275,8 @@ std::pair<vk::raii::Image, vk::raii::DeviceMemory> Engine::create_image(
 vk::raii::ImageView Engine::create_image_view(
         const vk::Image &image,
         vk::Format format,
-        vk::ImageAspectFlagBits aspect
+        vk::ImageAspectFlagBits aspect,
+        uint32_t mip_levels
     )
 {
     vk::ImageViewCreateInfo image_view_info(
@@ -170,7 +288,7 @@ vk::raii::ImageView Engine::create_image_view(
         vk::ImageSubresourceRange(
             aspect,
             0,
-            1,
+            mip_levels,
             0,
             1
         )
@@ -233,6 +351,7 @@ uint32_t Engine::find_memory_type(
 void Engine::transition_image_layout(
         vk::raii::CommandBuffer &cb,
         const vk::Image &image,
+        uint32_t mip_levels,
         vk::ImageAspectFlagBits aspect,
         vk::ImageLayout old_layout,
         vk::ImageLayout new_layout,
@@ -245,7 +364,7 @@ void Engine::transition_image_layout(
     vk::ImageSubresourceRange subresource_range(
         aspect,
         0,
-        1,
+        mip_levels,
         0,
         1
     );
@@ -265,7 +384,7 @@ void Engine::transition_image_layout(
         {},
         {},
         {},
-        { barrier }
+        barrier
     );
 
 

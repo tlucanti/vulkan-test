@@ -325,7 +325,8 @@ void Engine::create_image_views(void)
             create_image_view(
                 image,
                 this->swapchain_surface_foramt.format,
-                vk::ImageAspectFlagBits::eColor
+                vk::ImageAspectFlagBits::eColor,
+                1
             )
         );
     }
@@ -522,6 +523,7 @@ void Engine::create_depth_resources(void)
         this->swapchain_extent.width,
         this->swapchain_extent.height,
         this->depth_format,
+        1,
         vk::ImageUsageFlagBits::eDepthStencilAttachment,
         vk::MemoryPropertyFlagBits::eDeviceLocal
     );
@@ -529,7 +531,8 @@ void Engine::create_depth_resources(void)
     this->depth_image_view = create_image_view(
         this->depth_image,
         this->depth_format,
-        vk::ImageAspectFlagBits::eDepth
+        vk::ImageAspectFlagBits::eDepth,
+        1
     );
 }
 
@@ -548,6 +551,8 @@ void Engine::create_texture_image(void)
         throw std::runtime_error("failed to load texture at path "s + CONFIG_TEXTURE_PATH);
     }
 
+    this->mip_levels = std::floor(std::log2(std::max(width, height))) + 1;
+
     vk::DeviceSize size = width * height * 4;
 
     auto [staging_buffer, staging_buffer_mem] = create_buffer(
@@ -562,11 +567,16 @@ void Engine::create_texture_image(void)
 
     stbi_image_free(pixels);
 
+    vk::ImageUsageFlags usage =
+        vk::ImageUsageFlagBits::eTransferSrc |
+        vk::ImageUsageFlagBits::eTransferDst |
+        vk::ImageUsageFlagBits::eSampled;
     std::tie(this->texture_image, this->texture_image_mem) = create_image(
         width,
         height,
         vk::Format::eR8G8B8A8Srgb,
-        vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled,
+        this->mip_levels,
+        usage,
         vk::MemoryPropertyFlagBits::eDeviceLocal
     );
 
@@ -574,6 +584,7 @@ void Engine::create_texture_image(void)
     transition_image_layout(
         cb,
         this->texture_image,
+        this->mip_levels,
         vk::ImageAspectFlagBits::eColor,
         vk::ImageLayout::eUndefined,
         vk::ImageLayout::eTransferDstOptimal,
@@ -585,17 +596,7 @@ void Engine::create_texture_image(void)
 
     copy_buffer_to_image(cb, this->texture_image, staging_buffer, width, height);
 
-    transition_image_layout(
-        cb,
-        this->texture_image,
-        vk::ImageAspectFlagBits::eColor,
-        vk::ImageLayout::eTransferDstOptimal,
-        vk::ImageLayout::eShaderReadOnlyOptimal,
-        vk::AccessFlagBits2::eTransferWrite,
-        vk::AccessFlagBits2::eShaderRead,
-        vk::PipelineStageFlagBits2::eTransfer,
-        vk::PipelineStageFlagBits2::eFragmentShader
-    );
+    generate_mipmaps(cb, this->texture_image, this->mip_levels, width, height);
 
     end_single_time_commands(std::move(cb));
 }
@@ -605,7 +606,8 @@ void Engine::create_texture_image_view(void)
     this->texture_image_view = create_image_view(
         this->texture_image,
         vk::Format::eR8G8B8A8Srgb,
-        vk::ImageAspectFlagBits::eColor
+        vk::ImageAspectFlagBits::eColor,
+        this->mip_levels
     );
 }
 
@@ -627,7 +629,7 @@ void Engine::create_texture_sampler(void)
         vk::False,
         vk::CompareOp::eNever,
         0,
-        0,
+        vk::LodClampNone,
         vk::BorderColor::eIntOpaqueBlack,
         vk::False
     );
@@ -769,6 +771,7 @@ void Engine::record_command_buffer(uint32_t image_index, uint32_t frame_index)
     transition_image_layout(
         cb,
         this->swapchain_images.at(image_index),
+        1,
         vk::ImageAspectFlagBits::eColor,
         vk::ImageLayout::eUndefined,
         vk::ImageLayout::eColorAttachmentOptimal,
@@ -782,6 +785,7 @@ void Engine::record_command_buffer(uint32_t image_index, uint32_t frame_index)
     transition_image_layout(
         cb,
         this->depth_image,
+        1,
         vk::ImageAspectFlagBits::eDepth,
         vk::ImageLayout::eUndefined,
         vk::ImageLayout::eDepthAttachmentOptimal,
@@ -885,6 +889,7 @@ void Engine::record_command_buffer(uint32_t image_index, uint32_t frame_index)
     transition_image_layout(
         cb,
         this->swapchain_images.at(image_index),
+        1,
         vk::ImageAspectFlagBits::eColor,
         vk::ImageLayout::eColorAttachmentOptimal,
         vk::ImageLayout::ePresentSrcKHR,
