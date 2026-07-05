@@ -268,7 +268,7 @@ void Engine::create_swapchain(void)
     uint32_t                   image_count;
 
     surface_capabilities = this->physical_device.getSurfaceCapabilitiesKHR(this->surface);
-    this->swapchain_surface_foramt = choose_swapchain_surface_format(this->physical_device, this->surface);
+    this->swapchain_surface_format = choose_swapchain_surface_format(this->physical_device, this->surface);
     this->swapchain_extent = choose_swapchain_extent(this->physical_device, this->surface, this->window);
 
     image_count = surface_capabilities.minImageCount + 1;
@@ -285,8 +285,8 @@ void Engine::create_swapchain(void)
         {},
         surface,
         image_count,
-        this->swapchain_surface_foramt.format,
-        this->swapchain_surface_foramt.colorSpace,
+        this->swapchain_surface_format.format,
+        this->swapchain_surface_format.colorSpace,
         this->swapchain_extent,
         1,
         vk::ImageUsageFlagBits::eColorAttachment,
@@ -308,7 +308,7 @@ void Engine::create_image_views(void)
         {},
         {},
         vk::ImageViewType::e2D,
-        this->swapchain_surface_foramt.format,
+        this->swapchain_surface_format.format,
         {},
         vk::ImageSubresourceRange(
             vk::ImageAspectFlagBits::eColor,
@@ -324,7 +324,7 @@ void Engine::create_image_views(void)
         this->swapchain_image_views.emplace_back(
             create_image_view(
                 image,
-                this->swapchain_surface_foramt.format,
+                this->swapchain_surface_format.format,
                 vk::ImageAspectFlagBits::eColor,
                 1
             )
@@ -483,7 +483,7 @@ void Engine::create_graphics_pipeline(void)
     // pipeline rendering
     vk::PipelineRenderingCreateInfo pipeline_rendering(
         {},
-        swapchain_surface_foramt.format,
+        swapchain_surface_format.format,
         this->depth_format
     );
 

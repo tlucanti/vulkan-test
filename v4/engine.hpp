@@ -216,7 +216,7 @@ private:
     vk::raii::Queue                  queue           = nullptr;
 
     vk::raii::SwapchainKHR           swapchain       = nullptr;
-    vk::SurfaceFormatKHR             swapchain_surface_foramt;
+    vk::SurfaceFormatKHR             swapchain_surface_format;
     vk::Extent2D                     swapchain_extent;
 
     std::vector<vk::Image>           swapchain_images;
