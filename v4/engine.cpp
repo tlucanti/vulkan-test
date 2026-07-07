@@ -79,6 +79,7 @@ void Engine::init_vulkan(void)
     create_logical_device();
     create_swapchain();
     create_image_views();
+    create_color_resources();
     create_depth_resources();
     create_descriptor_set_layout();
     create_graphics_pipeline();
@@ -220,6 +221,9 @@ void Engine::pick_physical_device(void)
         std::cout << "Selected device: " << this->physical_device.getProperties().deviceName
                   << " (with score " << candidates.rbegin()->first << ")\n";
     }
+
+    this->msaa_samples = get_max_msaa(this->physical_device);
+    std::cout << "MSAA SAMPLES " << (uint64_t)this->msaa_samples << "\n";
 }
 
 void Engine::create_logical_device(void)
@@ -233,8 +237,9 @@ void Engine::create_logical_device(void)
                        vk::PhysicalDeviceVulkan11Features,
                        vk::PhysicalDeviceVulkan13Features,
                        vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT> feature_chain = {
-        vk::PhysicalDeviceFeatures2()
-            .features.setSamplerAnisotropy(true),
+        vk::PhysicalDeviceFeatures2().features
+            .setSamplerAnisotropy(true)
+            .setSampleRateShading(true),
         vk::PhysicalDeviceVulkan11Features()
             .setShaderDrawParameters(true),
         vk::PhysicalDeviceVulkan13Features()
@@ -426,8 +431,9 @@ void Engine::create_graphics_pipeline(void)
     // multisampling state
     vk::PipelineMultisampleStateCreateInfo multisampler(
         {},
-        vk::SampleCountFlagBits::e1,
-        vk::False
+        this->msaa_samples,
+        vk::True,
+        0.2f
     );
 
     // depth-stencil state
@@ -511,6 +517,28 @@ void Engine::create_graphics_pipeline(void)
     this->pipeline = vk::raii::Pipeline(this->device, nullptr, pipeline_create_info);
 }
 
+void Engine::create_color_resources(void)
+{
+    vk::Format format = this->swapchain_surface_format.format;
+
+    std::tie(this->color_image, this->color_image_mem) = create_image(
+        this->swapchain_extent.width,
+        this->swapchain_extent.height,
+        format,
+        1,
+        this->msaa_samples,
+        vk::ImageUsageFlagBits::eTransientAttachment | vk::ImageUsageFlagBits::eColorAttachment,
+        vk::MemoryPropertyFlagBits::eDeviceLocal
+    );
+
+    this->color_image_view = create_image_view(
+        this->color_image,
+        format,
+        vk::ImageAspectFlagBits::eColor,
+        1
+    );
+}
+
 void Engine::create_depth_resources(void)
 {
     this->depth_format = find_supported_format(
@@ -524,6 +552,7 @@ void Engine::create_depth_resources(void)
         this->swapchain_extent.height,
         this->depth_format,
         1,
+        this->msaa_samples,
         vk::ImageUsageFlagBits::eDepthStencilAttachment,
         vk::MemoryPropertyFlagBits::eDeviceLocal
     );
@@ -576,6 +605,7 @@ void Engine::create_texture_image(void)
         height,
         vk::Format::eR8G8B8A8Srgb,
         this->mip_levels,
+        vk::SampleCountFlagBits::e1,
         usage,
         vk::MemoryPropertyFlagBits::eDeviceLocal
     );
@@ -672,6 +702,7 @@ void Engine::load_model(void)
             this->indices.push_back(it->second);
         }
     }
+
 }
 
 void Engine::create_vertex_buffer(void)
@@ -777,7 +808,21 @@ void Engine::record_command_buffer(uint32_t image_index, uint32_t frame_index)
         vk::ImageLayout::eColorAttachmentOptimal,
         {},
         vk::AccessFlagBits2::eColorAttachmentWrite,
-        vk::PipelineStageFlagBits2::eTopOfPipe,
+        vk::PipelineStageFlagBits2::eColorAttachmentOutput, //vk::PipelineStageFlagBits2::eTopOfPipe,
+        vk::PipelineStageFlagBits2::eColorAttachmentOutput
+    );
+
+    // before start rendering - transition color image to color attachment optimal layout
+    transition_image_layout(
+        cb,
+        this->color_image,
+        1,
+        vk::ImageAspectFlagBits::eColor,
+        vk::ImageLayout::eUndefined,
+        vk::ImageLayout::eColorAttachmentOptimal,
+        vk::AccessFlagBits2::eColorAttachmentWrite,
+        vk::AccessFlagBits2::eColorAttachmentWrite,
+        vk::PipelineStageFlagBits2::eColorAttachmentOutput,
         vk::PipelineStageFlagBits2::eColorAttachmentOutput
     );
 
@@ -797,11 +842,11 @@ void Engine::record_command_buffer(uint32_t image_index, uint32_t frame_index)
 
     // start dynamic rendering
     vk::RenderingAttachmentInfo color_attachment_info(
+        this->color_image_view,
+        vk::ImageLayout::eColorAttachmentOptimal,
+        vk::ResolveModeFlagBits::eAverage,
         this->swapchain_image_views.at(image_index),
         vk::ImageLayout::eColorAttachmentOptimal,
-        {},
-        {},
-        {},
         vk::AttachmentLoadOp::eClear,
         vk::AttachmentStoreOp::eStore,
         vk::ClearColorValue(0, 0, 0, 1)
@@ -1018,6 +1063,7 @@ void Engine::recreate_swapchain(void)
 
     create_swapchain();
     create_image_views();
+    create_color_resources();
     create_depth_resources();
     create_swapchain_sync_objects();
 }

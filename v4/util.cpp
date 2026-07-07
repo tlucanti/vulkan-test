@@ -13,6 +13,22 @@ static inline uint64_t BIT(uint64_t x)
     return 1 << x;
 }
 
+vk::SampleCountFlagBits Engine::get_max_msaa(const vk::raii::PhysicalDevice &pd)
+{
+    vk::PhysicalDeviceProperties props = pd.getProperties();
+
+    vk::SampleCountFlags count = props.limits.framebufferColorSampleCounts &
+                                 props.limits.framebufferDepthSampleCounts;
+
+    if (count & vk::SampleCountFlagBits::e64) return vk::SampleCountFlagBits::e64;
+    else if (count & vk::SampleCountFlagBits::e32) return vk::SampleCountFlagBits::e32;
+    else if (count & vk::SampleCountFlagBits::e16) return vk::SampleCountFlagBits::e16;
+    else if (count & vk::SampleCountFlagBits::e8) return vk::SampleCountFlagBits::e8;
+    else if (count & vk::SampleCountFlagBits::e4) return vk::SampleCountFlagBits::e4;
+    else if (count & vk::SampleCountFlagBits::e2) return vk::SampleCountFlagBits::e2;
+    else return vk::SampleCountFlagBits::e1;
+}
+
 vk::Format Engine::find_supported_format(
         const std::vector<vk::Format> &candidates,
         vk::ImageTiling tiling,
@@ -234,6 +250,7 @@ std::pair<vk::raii::Image, vk::raii::DeviceMemory> Engine::create_image(
         uint32_t height,
         vk::Format format,
         uint32_t mip_levels,
+        vk::SampleCountFlagBits num_samples,
         vk::ImageUsageFlags usage,
         vk::MemoryPropertyFlags properties
     )
@@ -245,7 +262,7 @@ std::pair<vk::raii::Image, vk::raii::DeviceMemory> Engine::create_image(
         {width, height, 1},
         mip_levels,
         1,
-        vk::SampleCountFlagBits::e1,
+        num_samples,
         vk::ImageTiling::eOptimal,
         usage,
         vk::SharingMode::eExclusive,

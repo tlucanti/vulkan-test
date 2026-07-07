@@ -38,6 +38,7 @@ private:
         void create_descriptor_sets(void);
         void create_graphics_pipeline(void);
 
+        void create_color_resources(void);
         void create_depth_resources(void);
         void create_texture_image(void);
         void create_texture_image_view(void);
@@ -67,6 +68,9 @@ private:
     void cleanup(void);
 
     // util functions
+    [[nodiscard]]
+    vk::SampleCountFlagBits get_max_msaa(const vk::raii::PhysicalDevice &pd);
+
     [[nodiscard]]
     vk::Format find_supported_format(
         const std::vector<vk::Format> &candidates,
@@ -103,6 +107,7 @@ private:
         uint32_t height,
         vk::Format format,
         uint32_t mip_levels,
+        vk::SampleCountFlagBits num_samples,
         vk::ImageUsageFlags usage,
         vk::MemoryPropertyFlags properties
     );
@@ -212,6 +217,8 @@ private:
     vk::raii::PhysicalDevice         physical_device = nullptr;
     vk::raii::Device                 device          = nullptr;
 
+    vk::SampleCountFlagBits          msaa_samples    = vk::SampleCountFlagBits::e1;
+
     uint32_t                         queue_index     = -1;
     vk::raii::Queue                  queue           = nullptr;
 
@@ -248,6 +255,10 @@ private:
     vk::raii::DeviceMemory           depth_image_mem  = nullptr;
     vk::raii::ImageView              depth_image_view = nullptr;
     vk::Format                       depth_format     = vk::Format::eUndefined;
+
+    vk::raii::Image                  color_image       = nullptr;
+    vk::raii::DeviceMemory           color_image_mem   = nullptr;
+    vk::raii::ImageView              color_image_view  = nullptr;
 
     std::vector<vk::raii::Buffer>       uniform_buffers;
     std::vector<vk::raii::DeviceMemory> uniform_buffers_mem;
